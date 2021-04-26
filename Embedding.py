@@ -12,7 +12,6 @@ class Embedding(nn.Module):
         super(Embedding, self).__init__()
         self.dim_input = int(cfg['emb']['dim_input'])
         self.dim_hidden = int(cfg['emb']['dim_hidden'])
-        self.dim_output = int(cfg['emb']['dim_output'])
         self.num_layers = int(cfg['emb']['num_layers'])
         self.seq_len = int(cfg['system']['seq_len'])
 

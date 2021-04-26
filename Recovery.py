@@ -12,7 +12,6 @@ class Recovery(nn.Module):
         super(Recovery, self).__init__()
         self.dim_input = int(cfg['rec']['dim_input'])
         self.dim_hidden = int(cfg['rec']['dim_hidden'])
-        self.dim_output = int(cfg['rec']['dim_output'])
         self.num_layers = int(cfg['rec']['num_layers'])
         self.seq_len = int(cfg['system']['seq_len'])
 
