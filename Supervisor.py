@@ -19,7 +19,7 @@ class Supervisor(nn.Module):
         self.padding_value = int(cfg['system']['padding_value'])
 
         # Architecture
-        self.sup_rnn = nn.GRU(input_size=self.dim_input,
+        self.sup_rnn = nn.GRU(input_size=self.dim_hidden,
                               hidden_size=self.dim_hidden,
                               num_layers=self.num_layers,
                               batch_first=True)

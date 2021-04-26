@@ -10,7 +10,7 @@ class Recovery(nn.Module):
     """
     def __init__(self, cfg):
         super(Recovery, self).__init__()
-        self.dim_input = int(cfg['rec']['dim_input'])
+        self.dim_output = int(cfg['rec']['dim_output'])
         self.dim_hidden = int(cfg['rec']['dim_hidden'])
         self.num_layers = int(cfg['rec']['num_layers'])
         self.seq_len = int(cfg['system']['seq_len'])
@@ -19,11 +19,11 @@ class Recovery(nn.Module):
         self.padding_value = int(cfg['system']['padding_value'])
 
         # Architecture
-        self.rec_rnn = nn.GRU(input_size=self.dim_input,
+        self.rec_rnn = nn.GRU(input_size=self.dim_hidden,
                               hidden_size=self.dim_hidden,
                               num_layers=self.num_layers,
                               batch_first=True)
-        self.rec_linear = nn.Linear(self.dim_hidden, self.dim_hidden)
+        self.rec_linear = nn.Linear(self.dim_hidden, self.dim_output)
 
         with torch.no_grad():
             for name, param in self.rec_rnn.named_parameters():
