@@ -8,9 +8,10 @@ class Embedding(nn.Module):
         ENCODER
 
     """
+
     def __init__(self, cfg):
         super(Embedding, self).__init__()
-        self.dim_input = int(cfg['emb']['dim_input'])
+        self.dim_features = int(cfg['emb']['dim_features'])
         self.dim_hidden = int(cfg['emb']['dim_hidden'])
         self.num_layers = int(cfg['emb']['num_layers'])
         self.seq_len = int(cfg['system']['seq_len'])
@@ -19,7 +20,7 @@ class Embedding(nn.Module):
         self.padding_value = int(cfg['system']['padding_value'])
 
         # Architecture
-        self.emb_rnn = nn.GRU(input_size=self.dim_input,
+        self.emb_rnn = nn.GRU(input_size=self.dim_features,
                               hidden_size=self.dim_hidden,
                               num_layers=self.num_layers,
                               batch_first=True)
@@ -52,6 +53,7 @@ class Embedding(nn.Module):
                                                      lengths=t,
                                                      batch_first=True,
                                                      enforce_sorted=True)
+
         h_0, _ = self.emb_rnn(x_packed)
         h_0, _ = nn.utils.rnn.pad_packed_sequence(sequence=h_0,
                                                   batch_first=True,
@@ -66,3 +68,27 @@ class Embedding(nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+
+
+def run_embedding_test():
+    cfg = {
+        "emb": {
+            "dim_features": 5,  # feature dimension
+            "dim_hidden": 100,  # latent space dimension
+            "num_layers": 50  # number of layers in GRU
+        },
+        "system": {
+            "seq_len": 150,
+            "padding_value": 0.0  # default on 0.0
+        }
+    }
+
+    emb = Embedding(cfg)
+    x = torch.randn(size=(10, 150, 5))
+    t = torch.ones(size=(10,))
+    result = emb(x, t)
+    assert result.shape == torch.Size((10, 150, 100)), 'Embedding failed to encode input data'
+
+
+if __name__ == '__main__':
+    run_embedding_test()
