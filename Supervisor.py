@@ -6,6 +6,7 @@ class Supervisor(nn.Module):
     """
 
         DECODER, for predicting next step data
+        - middleware network -
 
     """
 
@@ -52,17 +53,41 @@ class Supervisor(nn.Module):
                                                      lengths=t,
                                                      batch_first=True,
                                                      enforce_sorted=True)
-        h_0, _ = self.emb_rnn(h_packed)
+        h_0, _ = self.sup_rnn(h_packed)
         h_0, _ = nn.utils.rnn.pad_packed_sequence(sequence=h_0,
                                                   batch_first=True,
                                                   padding_value=self.padding_value,
                                                   total_length=self.seq_len)
 
-        logits = self.emb_linear(h_0)
-        h = self.emb_sigmoid(logits)
+        logits = self.sup_linear(h_0)
+        h = self.sup_sigmoid(logits)
 
         return h
 
     @property
     def device(self):
         return next(self.parameters()).device
+
+
+def run_supervisor_test():
+    cfg = {
+        "sup": {
+            "dim_features": 5,  # feature dimension (unused - middleware network -)
+            "dim_hidden": 100,  # latent space dimension (H)
+            "num_layers": 50  # number of layers in GRU
+        },
+        "system": {
+            "seq_len": 150,
+            "padding_value": 0.0  # default on 0.0
+        }
+    }
+
+    sup = Supervisor(cfg)
+    h = torch.randn(size=(10, 150, 100))
+    t = torch.ones(size=(10,))
+    result = sup(h, t)
+    assert result.shape == torch.Size((10, 150, 100)), 'Supervisor failed to encode input data'
+
+
+if __name__ == '__main__':
+    run_supervisor_test()
