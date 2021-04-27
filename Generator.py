@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Dict
 
 
 class Generator(nn.Module):
@@ -9,7 +10,7 @@ class Generator(nn.Module):
 
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: Dict):
         super(Generator, self).__init__()
         self.dim_latent = int(cfg['g']['dim_latent'])
         self.dim_hidden = int(cfg['g']['dim_hidden'])
@@ -44,7 +45,7 @@ class Generator(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, z, t):
+    def forward(self, z: torch.Tensor, t: torch.Tensor):
         """
             :param z: random noise batch * sequence_len * dim_latent
             :param t: temporal information batch * 1
@@ -69,7 +70,7 @@ class Generator(nn.Module):
         return next(self.parameters()).device
 
 
-def run_generator_test():
+def run_generator_test() -> None:
     cfg = {
         "g": {
             "dim_latent": 64,  # Z (input latent space dimension) size (eq. 128) [ INPUT ]

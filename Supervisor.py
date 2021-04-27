@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Dict
 
 
 class Supervisor(nn.Module):
@@ -10,7 +11,7 @@ class Supervisor(nn.Module):
 
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: Dict):
         super(Supervisor, self).__init__()
         self.dim_hidden = int(cfg['sup']['dim_hidden'])
         self.num_layers = int(cfg['sup']['num_layers'])
@@ -43,7 +44,7 @@ class Supervisor(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, h, t):
+    def forward(self, h: torch.Tensor, t: torch.Tensor):
         """
             :param h: latent representation batch * sequence_len * H
             :param t: temporal information batch * 1
@@ -69,7 +70,7 @@ class Supervisor(nn.Module):
         return next(self.parameters()).device
 
 
-def run_supervisor_test():
+def run_supervisor_test() -> None:
     cfg = {
         "sup": {
             "dim_features": 5,  # feature dimension (unused - middleware network -)

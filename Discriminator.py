@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from typing import Dict
 
 class Discriminator(nn.Module):
     """
@@ -9,7 +9,7 @@ class Discriminator(nn.Module):
 
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: Dict):
         super(Discriminator, self).__init__()
         self.dim_hidden = int(cfg['d']['dim_hidden'])
         self.num_layers = int(cfg['d']['num_layers'])
@@ -41,7 +41,7 @@ class Discriminator(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, h, t):
+    def forward(self, h: torch.Tensor, t: torch.Tensor):
         """
             :param h: latent representation batch * seq_len * H (from embedding)
             :param t: temporal information batch * 1
@@ -65,7 +65,7 @@ class Discriminator(nn.Module):
         return next(self.parameters()).device
 
 
-def run_discriminator_test():
+def run_discriminator_test() -> None:
     cfg = {
         "d": {
             "dim_hidden": 100,  # representation latent space dimension (H)

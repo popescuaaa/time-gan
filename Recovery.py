@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Dict
 
 
 class Recovery(nn.Module):
@@ -8,7 +9,7 @@ class Recovery(nn.Module):
         DECODER
 
     """
-    def __init__(self, cfg):
+    def __init__(self, cfg: Dict):
         super(Recovery, self).__init__()
         self.dim_output = int(cfg['rec']['dim_output'])
         self.dim_hidden = int(cfg['rec']['dim_hidden'])
@@ -41,7 +42,7 @@ class Recovery(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, h, t):
+    def forward(self, h: torch.Tensor, t: torch.Tensor):
         """
             :param h: latent representation batch * seq_len * H (from embedding)
             :param t: temporal information batch * 1
@@ -65,7 +66,7 @@ class Recovery(nn.Module):
         return next(self.parameters()).device
 
 
-def run_recovery_test():
+def run_recovery_test() -> None:
     cfg = {
         "rec": {
             "dim_output": 5,  # output feature dimension
