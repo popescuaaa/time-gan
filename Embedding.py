@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Dict
 
 
 class Embedding(nn.Module):
@@ -9,7 +10,7 @@ class Embedding(nn.Module):
 
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: Dict):
         super(Embedding, self).__init__()
         self.dim_features = int(cfg['emb']['dim_features'])
         self.dim_hidden = int(cfg['emb']['dim_hidden'])
@@ -43,7 +44,7 @@ class Embedding(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, x, t):
+    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
             :param x: time series batch * sequence_len * features
             :param t: temporal information batch * 1
@@ -70,7 +71,7 @@ class Embedding(nn.Module):
         return next(self.parameters()).device
 
 
-def run_embedding_test():
+def run_embedding_test() -> None:
     cfg = {
         "emb": {
             "dim_features": 5,  # feature dimension
