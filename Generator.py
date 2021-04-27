@@ -13,7 +13,7 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         self.dim_latent = int(cfg['g']['dim_latent'])
         self.dim_hidden = int(cfg['g']['dim_hidden'])
-        self.num_layers = int(cfg['e']['num_layers'])
+        self.num_layers = int(cfg['g']['num_layers'])
         self.seq_len = int(cfg['system']['seq_len'])
 
         # Dynamic RNN input
@@ -67,3 +67,27 @@ class Generator(nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+
+
+def run_generator_test():
+    cfg = {
+        "g": {
+            "dim_latent": 64,  # Z (input latent space dimension) size (eq. 128) [ INPUT ]
+            "dim_hidden": 100,  # representation latent space dimension [ ENCODING ]
+            "num_layers": 50  # number of layers in GRU
+        },
+        "system": {
+            "seq_len": 150,
+            "padding_value": 0.0  # default on 0.0
+        }
+    }
+
+    g = Generator(cfg)
+    z = torch.randn(size=(10, 150, 64))
+    t = torch.ones(size=(10,))
+    result = g(z, t)
+    assert result.shape == torch.Size((10, 150, 100)), 'Generator failed to generate correct shape data'
+
+
+if __name__ == '__main__':
+    run_generator_test()
