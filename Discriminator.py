@@ -8,6 +8,7 @@ class Discriminator(nn.Module):
         DECODER
 
     """
+
     def __init__(self, cfg):
         super(Discriminator, self).__init__()
         self.dim_hidden = int(cfg['d']['dim_hidden'])
@@ -62,3 +63,26 @@ class Discriminator(nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+
+
+def run_discriminator_test():
+    cfg = {
+        "d": {
+            "dim_hidden": 100,  # representation latent space dimension (H)
+            "num_layers": 50  # number of layers in GRU
+        },
+        "system": {
+            "seq_len": 150,
+            "padding_value": 0.0  # default on 0.0
+        }
+    }
+
+    d = Discriminator(cfg)
+    h = torch.randn(size=(10, 150, 100))
+    t = torch.ones(size=(10,))
+    result = d(h, t)
+    assert result.shape == torch.Size((10, 150)), 'Discriminator failed to decode data'
+
+
+if __name__ == '__main__':
+    run_discriminator_test()
