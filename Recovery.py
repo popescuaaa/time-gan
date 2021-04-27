@@ -51,15 +51,39 @@ class Recovery(nn.Module):
                                                      lengths=t,
                                                      batch_first=True,
                                                      enforce_sorted=True)
-        h_0, _ = self.emb_rnn(h_packed)
+        h_0, _ = self.rec_rnn(h_packed)
         h_0, _ = nn.utils.rnn.pad_packed_sequence(sequence=h_0,
                                                   batch_first=True,
                                                   padding_value=self.padding_value,
                                                   total_length=self.seq_len)
 
-        recovered_x = self.emb_linear(h_0)
+        recovered_x = self.rec_linear(h_0)
         return recovered_x
 
     @property
     def device(self):
         return next(self.parameters()).device
+
+
+def run_recovery_test():
+    cfg = {
+        "rec": {
+            "dim_output": 5,  # output feature dimension
+            "dim_hidden": 100,  # latent space dimension
+            "num_layers": 50  # number of layers in GRU
+        },
+        "system": {
+            "seq_len": 150,
+            "padding_value": 0.0  # default on 0.0
+        }
+    }
+
+    rec = Recovery(cfg)
+    h = torch.randn(size=(10, 150, 100))
+    t = torch.ones(size=(10,))
+    result = rec(h, t)
+    assert result.shape == torch.Size((10, 150, 5)), 'Recovery failed to decode input data'
+
+
+if __name__ == '__main__':
+    run_recovery_test()
