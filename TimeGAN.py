@@ -1,8 +1,6 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from Embedding import Embedding
 from Recovery import Recovery
 from Generator import Generator
@@ -13,7 +11,6 @@ from Supervisor import Supervisor
 class TimeGAN(nn.Module):
     def __init__(self, cfg):
         super(TimeGAN, self).__init__()
-        self.device = cfg['system']['device']
 
         # Architecture
         self.emb = Embedding(cfg)
@@ -175,10 +172,6 @@ class TimeGAN(nn.Module):
     def device(self):
         return next(self.parameters()).device
 
-    @device.setter
-    def device(self, value):
-        self._device = value
-
 
 def run_time_gan_test():
     cfg = {
@@ -220,15 +213,12 @@ def run_time_gan_test():
     t = torch.ones(size=(10,))
 
     embedding_stage_loss = tgan(x, t, z, "embedding")
-
     supervisor_stage_loss = tgan(x, t, z, "supervisor")
-
     discriminator_stage_loss = tgan(x, t, z, "discriminator")
-
     generator_stage_loss = tgan(x, t, z, "generator")
-
     inference_stage_loss = tgan(x, t, z, "inference")
 
 
 if __name__ == '__main__':
+    # Setup
     run_time_gan_test()
