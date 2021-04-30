@@ -230,10 +230,5 @@ def run_time_gan_test():
     inference_stage_loss = tgan(x, t, z, "inference")
 
 
-def time_gan_trainer(model: TimeGAN, data: np.ndarray, time: np.ndarray, cfg) -> None:
-    # Init dataset
-    pass
-
-
 if __name__ == '__main__':
     run_time_gan_test()
