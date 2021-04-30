@@ -1,0 +1,31 @@
+system:
+  dataset: 'electricity'
+  sql_len: 150
+  lr: 1e-4
+  batch_size: 10
+  model_name: 'timegan'
+  device: 'cuda:0'
+  padding_value: 0.0
+  run_name: 'TimeGAN (baseline)'
+d:
+  dim_hidden: 32
+  num_layers: 50
+
+g:
+  dim_latent: 128
+  dim_hidden: 64
+  num_layers: 50
+emb:
+  dim_features: 1
+  dim_hidden: 64
+  num_layers: 50
+
+sup:
+  dim_features: 1
+  dim_hidden: 64
+  num_layers: 50
+
+rec:
+  dim_output: 1
+  dim_hidden: 64
+  num_layers: 50

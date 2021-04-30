@@ -5,6 +5,8 @@ import numpy as np
 from typing import Dict
 from torch.utils.data import DataLoader
 from data import GeneralDataset
+import yaml
+import wandb
 
 '''
     
@@ -166,4 +168,19 @@ def time_gan_trainer(time_gan: TimeGAN, cfg: Dict) -> None:
 
 
 if __name__ == '__main__':
-    pass
+    torch.random.manual_seed(42)
+
+    with open('config.yaml', 'r') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
+    wandb.init(config=config, project='_timegan_baseline_', name=run_name)
+
+    time_gan = TimeGAN(cfg=config)
+    time_gan_trainer(time_gan=time_gan, cfg=config)
+
+    # torch.save(time_gan.g.state_dict(), './trained_models/rcgan_g.pt')
+    # torch.save(time_gan.d.state_dict(), './trained_models/rcgan_d.pt')
+    #
+    # time_gan.g = time_gan.g.to(config['system']['device'])
+    # time_gan.d = time_gan.d.to(config['system']['device'])
+
