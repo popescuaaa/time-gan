@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,11 +14,6 @@ class TimeGAN(nn.Module):
     def __init__(self, cfg):
         super(TimeGAN, self).__init__()
         self.device = cfg['system']['device']
-        self.dim_input = int(cfg['system']['dim_input'])
-        self.dim_latent = int(cfg['system']['dim_input'])
-        self.dim_hidden = int(cfg['system']['dim_hidden'])
-        self.seq_len = int(cfg['system']['seq_len'])
-        self.batch_size = int(cfg['system']['batch_size'])
 
         # Architecture
         self.emb = Embedding(cfg)
@@ -85,15 +81,15 @@ class TimeGAN(nn.Module):
     def _generator_forward(self, x, t, z, gamma=1.0):
         # Supervised Forward Pass
         h = self.emb(x, t)
-        _h_sup = self.sup(x, t)
+        _h_sup = self.sup(h, t)
         _x = self.rec(h, t)
 
         # Generator Forward Pass
         _e = self.g(z, t)
         _h = self.sup(_e, t)
 
-        # Synthetic data generated
-        _e = self.rec(_h, t)
+        # Synthetic generated data
+        _x = self.rec(_h, t)  # recovered data
 
         # Generator Loss
 
@@ -114,7 +110,7 @@ class TimeGAN(nn.Module):
 
         g_loss_v = g_loss_v1 + g_loss_v2
 
-        # 4. Summation
+        # 4. Sum
         g_loss = g_loss_u + gamma * g_loss_u_e + 100 * torch.sqrt(g_loss_s) + 100 * g_loss_v
 
         return g_loss
@@ -123,11 +119,11 @@ class TimeGAN(nn.Module):
         # Generate synthetic data
 
         # Generator Forward Pass
-        _e = self.generator(z, t)
-        _h = self.supervisor(_e, t)
+        _e = self.g(z, t)
+        _h = self.sup(_e, t)
 
         # Synthetic generated data (reconstructed)
-        _x = self.recovery(_h, t)
+        _x = self.rec(_h, t)
         return _x
 
     def forward(self, x, t, z, stage, gamma=1.0):
@@ -144,43 +140,100 @@ class TimeGAN(nn.Module):
         if stage == 'embedding':
             # Embedding & Recovery
             loss = self._recovery_forward(x, t)
+            return loss
 
         elif stage == 'supervisor':
             # Supervisor
             loss = self._supervisor_forward(x, t)
+            return loss
 
         elif stage == 'generator':
             if z is None:
                 raise ValueError("z is not given")
 
             # Generator
-            loss = self._generator_forward(x, t, z)
+            loss = self._generator_forward(x, t, z, gamma)
+            return loss
 
         elif stage == 'discriminator':
             if z is None:
                 raise ValueError("z is not given")
 
             # Discriminator
-            loss = self._discriminator_forward(x, t, z)
-
+            loss = self._discriminator_forward(x, t, z, gamma)
             return loss
 
         elif stage == 'inference':
-
             _x = self._inference(z, t)
             _x = _x.cpu().detach()
-
             return _x
 
         else:
-            raise ValueError('stage should be either [embedding, supervisor, generator, discriminator')
+            raise ValueError('stage should be either [embedding, supervisor, generator, discriminator, inference]')
 
-"""
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
-    Utils functions
-    
-"""
+    @device.setter
+    def device(self, value):
+        self._device = value
 
 
-def time_gan_trainer():
+def run_time_gan_test():
+    cfg = {
+        "emb": {
+            "dim_features": 5,  # feature dimension
+            "dim_hidden": 100,  # latent space dimension
+            "num_layers": 50  # number of layers in GRU
+        },
+        "g": {
+            "dim_latent": 64,  # Z (input latent space dimension) size (eq. 128) [ INPUT ]
+            "dim_hidden": 100,  # representation latent space dimension [ ENCODING ]
+            "num_layers": 50  # number of layers in GRU
+        },
+        "d": {
+            "dim_hidden": 100,  # representation latent space dimension (H)
+            "num_layers": 50  # number of layers in GRU
+        },
+        "rec": {
+            "dim_output": 5,  # output feature dimension
+            "dim_hidden": 100,  # latent space dimension
+            "num_layers": 50  # number of layers in GRU
+        },
+        "sup": {
+            "dim_features": 5,  # feature dimension (unused - middleware network -)
+            "dim_hidden": 100,  # latent space dimension (H)
+            "num_layers": 50  # number of layers in GRU
+        },
+        "system": {
+            "seq_len": 150,
+            "padding_value": 0.0,  # default on 0.0
+            "device": "cuda:0"
+        }
+    }
+
+    tgan = TimeGAN(cfg)
+
+    z = torch.randn(size=(10, 150, 64))
+    x = torch.randn(size=(10, 150, 5))
+    t = torch.ones(size=(10,))
+
+    embedding_stage_loss = tgan(x, t, z, "embedding")
+
+    supervisor_stage_loss = tgan(x, t, z, "supervisor")
+
+    discriminator_stage_loss = tgan(x, t, z, "discriminator")
+
+    generator_stage_loss = tgan(x, t, z, "generator")
+
+    inference_stage_loss = tgan(x, t, z, "inference")
+
+
+def time_gan_trainer(model: TimeGAN, data: np.ndarray, time: np.ndarray, cfg) -> None:
+    # Init dataset
     pass
+
+
+if __name__ == '__main__':
+    run_time_gan_test()

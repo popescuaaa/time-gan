@@ -41,7 +41,7 @@ class Discriminator(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, h: torch.Tensor, t: torch.Tensor):
+    def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
             :param h: latent representation batch * seq_len * H (from embedding)
             :param t: temporal information batch * 1
@@ -51,6 +51,7 @@ class Discriminator(nn.Module):
                                                      lengths=t,
                                                      batch_first=True,
                                                      enforce_sorted=True)
+
         h_0, _ = self.d_rnn(h_packed)
         h_0, _ = nn.utils.rnn.pad_packed_sequence(sequence=h_0,
                                                   batch_first=True,

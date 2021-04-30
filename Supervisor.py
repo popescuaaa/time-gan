@@ -44,7 +44,7 @@ class Supervisor(nn.Module):
                 elif 'bias' in name:
                     param.data.fill_(0)
 
-    def forward(self, h: torch.Tensor, t: torch.Tensor):
+    def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
             :param h: latent representation batch * sequence_len * H
             :param t: temporal information batch * 1
