@@ -12,9 +12,7 @@ class NIPSDataSet(Dataset):
         self.seq_len = seq_len
         self.raw_data = data
         self.model = model
-        if self.model == 'timegan':
-            pass
-        elif self.model == 'rcgan':
+        if self.model in self.MODELS:
             self.data = [torch.from_numpy(np.array(self.raw_data[i:i + self.seq_len]))
                          for i in range(0, len(self.raw_data) - self.seq_len)]
 
@@ -31,7 +29,7 @@ class NIPSDataSet(Dataset):
             self.dt_data = self.dt_data[:(len(self.dt_data) - offset)]
             self.full_data = [(self.data[i], self.dt_data[i]) for i in range(min(len(self.data), len(self.dt_data)))]
         else:
-            exit(-1)
+            raise ValueError('Model should be either rcgan or timegan!')
 
     def __len__(self):
         return len(self.full_data)
