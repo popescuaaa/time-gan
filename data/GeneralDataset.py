@@ -12,7 +12,17 @@ class NIPSDataSet(Dataset):
         self.seq_len = seq_len
         self.raw_data = data
         self.model = model
-        if self.model in self.MODELS:
+        if self.model == 'timegan':
+            self.data = [torch.from_numpy(np.array(self.raw_data[i:i + self.seq_len]))
+                         for i in range(0, len(self.raw_data) - self.seq_len)]
+
+            # Compute ∆t (deltas)
+            self.data = self.data[:(len(self.data) - offset)]
+            self.dt_data = [torch.tensor([self.seq_len], dtype=torch.int64) for _ in range(len(self.data))]
+
+            self.full_data = [(self.data[i], self.dt_data[i]) for i in range(min(len(self.data), len(self.dt_data)))]
+
+        elif self.model == 'rcgan':
             self.data = [torch.from_numpy(np.array(self.raw_data[i:i + self.seq_len]))
                          for i in range(0, len(self.raw_data) - self.seq_len)]
 
@@ -28,6 +38,7 @@ class NIPSDataSet(Dataset):
 
             self.dt_data = self.dt_data[:(len(self.dt_data) - offset)]
             self.full_data = [(self.data[i], self.dt_data[i]) for i in range(min(len(self.data), len(self.dt_data)))]
+
         else:
             raise ValueError('Model should be either rcgan or timegan!')
 
@@ -48,10 +59,10 @@ class NIPSDataSet(Dataset):
 
 class GeneralDataset:
     PATHS = {
-        'electricity': 'electricity_nips/train/data.json',
-        'solar': 'solar_nips/train/train.json',
-        'traffic': 'traffic_nips/train/data.json',
-        'exchange': 'exchange_rate_nips/train/train.json',
+        'electricity': './data/electricity_nips/train/data.json',
+        'solar': './data/solar_nips/train/train.json',
+        'traffic': './data/traffic_nips/train/data.json',
+        'exchange': './data/exchange_rate_nips/train/train.json',
         'taxi': 'taxi_30min/train/train.json'
     }
 
@@ -86,10 +97,12 @@ class GeneralDataset:
 
 
 if __name__ == '__main__':
-    ds_generator = GeneralDataset(150, 'taxi', 'rcgan')
+    ds_generator = GeneralDataset(150, 'electricity', 'timegan')
     ds = ds_generator.get_dataset()
     dl = DataLoader(ds, num_workers=10, batch_size=10, shuffle=True)
     for idx, e in enumerate(dl):
         data, dt = e
-        print(data.shape)
-        print(dt.shape)
+        print(data)
+        print(dt)
+        break
+
