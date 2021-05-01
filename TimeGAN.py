@@ -11,7 +11,7 @@ from Supervisor import Supervisor
 class TimeGAN(nn.Module):
     def __init__(self, cfg):
         super(TimeGAN, self).__init__()
-        self.device = cfg['system']['device']
+        self.device = torch.device(cfg['system']['device'])
 
         # Architecture
         self.emb = Embedding(cfg)
@@ -127,11 +127,12 @@ class TimeGAN(nn.Module):
     def forward(self, x, t, z, stage, gamma=1.0):
         if stage != 'inference':
             if x is None:
-                raise ValueError("x is not given")
-            x = x.to(self.device)
+                raise ValueError('x is not given')
+
+            assert x.device == self.device, 'x and timegan are not on the same device'
 
         if z is not None:
-            z = z.to(self.device)
+            assert z.device == self.device
 
         if stage == 'embedding':
             # Embedding & Recovery

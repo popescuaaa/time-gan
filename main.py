@@ -21,6 +21,7 @@ def embedding_trainer(time_gan: TimeGAN,
                       dl: DataLoader,
                       cfg: Dict) -> None:
     num_epochs = int(cfg['emb']['num_epochs'])
+    device = torch.device(cfg['system']['device'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -28,6 +29,8 @@ def embedding_trainer(time_gan: TimeGAN,
 
             x = x.float()
             x = x.view(*x.shape, 1)
+            x = x.to(device)
+
             t = t.view(-1)
 
             # Reset gradients
@@ -52,6 +55,7 @@ def supervisor_trainer(time_gan: TimeGAN,
                        dl: DataLoader,
                        cfg: Dict) -> None:
     num_epochs = int(cfg['sup']['num_epochs'])
+    device = torch.device(cfg['system']['device'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -59,6 +63,7 @@ def supervisor_trainer(time_gan: TimeGAN,
 
             x = x.float()
             x = x.view(*x.shape, 1)
+            x = x.to(device)
             t = t.view(-1)
 
             # Reset gradients
@@ -90,6 +95,7 @@ def joint_trainer(time_gan: TimeGAN,
     seq_len = int(cfg['system']['seq_len'])
     dim_latent = int(cfg['g']['dim_latent'])
     d_threshold = float(cfg['d']['threshold'])
+    device = torch.device(cfg['system']['device'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -97,6 +103,7 @@ def joint_trainer(time_gan: TimeGAN,
 
             x = x.float()
             x = x.view(*x.shape, 1)
+            x = x.to(device)
             t = t.view(-1)
 
             # Generator Training
@@ -150,13 +157,18 @@ def time_gan_trainer(time_gan: TimeGAN, cfg: Dict) -> None:
     seq_len = int(cfg['system']['seq_len'])
     batch_size = int(cfg['system']['batch_size'])
     model_name = cfg['system']['model_name']
-    device = cfg['system']['device']
+    device = torch.device(cfg['system']['device'])
     lr = float(cfg['system']['lr'])
 
     ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
     ds = ds_generator.get_dataset()
 
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
+    time_gan.emb.to(device)
+    time_gan.g.to(device)
+    time_gan.d.to(device)
+    time_gan.rec.to(device)
+    time_gan.sup.to(device)
     time_gan = time_gan.to(device)
 
     # Optimizers
