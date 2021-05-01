@@ -11,6 +11,7 @@ from Supervisor import Supervisor
 class TimeGAN(nn.Module):
     def __init__(self, cfg):
         super(TimeGAN, self).__init__()
+        self.device = cfg['system']['device']
 
         # Architecture
         self.emb = Embedding(cfg)
@@ -19,7 +20,7 @@ class TimeGAN(nn.Module):
         self.d = Discriminator(cfg)
         self.sup = Supervisor(cfg)
 
-    def _recovery_forward(self, x, t):
+    def _recovery_forward(self, x: torch.Tensor, t: torch.Tensor):
         # Forward pass
         h = self.emb(x, t)
         _x = self.rec(h, t)
@@ -127,11 +128,9 @@ class TimeGAN(nn.Module):
         if stage != 'inference':
             if x is None:
                 raise ValueError("x is not given")
-            x = torch.FloatTensor(x)
             x = x.to(self.device)
 
         if z is not None:
-            z = torch.FloatTensor(z)
             z = z.to(self.device)
 
         if stage == 'embedding':
@@ -171,6 +170,10 @@ class TimeGAN(nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+
+    @device.setter
+    def device(self, value):
+        self._device = value
 
 
 def run_time_gan_test():

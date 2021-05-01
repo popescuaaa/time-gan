@@ -23,7 +23,13 @@ def embedding_trainer(time_gan: TimeGAN,
     num_epochs = int(cfg['emb']['num_epochs'])
 
     for epoch in range(num_epochs):
-        for x, t in enumerate(dl):
+        for idx, real_data in enumerate(dl):
+            x, t = real_data
+
+            x = x.float()
+            x = x.view(*x.shape, 1)
+            t = t.view(-1)
+
             # Reset gradients
             time_gan.zero_grad()
 
@@ -48,7 +54,13 @@ def supervisor_trainer(time_gan: TimeGAN,
     num_epochs = int(cfg['sup']['num_epochs'])
 
     for epoch in range(num_epochs):
-        for x, t in enumerate(dl):
+        for idx, real_data in enumerate(dl):
+            x, t = real_data
+
+            x = x.float()
+            x = x.view(*x.shape, 1)
+            t = t.view(-1)
+
             # Reset gradients
             time_gan.zero_grad()
 
@@ -80,7 +92,13 @@ def joint_trainer(time_gan: TimeGAN,
     d_threshold = float(cfg['d']['threshold'])
 
     for epoch in range(num_epochs):
-        for x, t in enumerate(dl):
+        for idx, real_data in enumerate(dl):
+            x, t = real_data
+
+            x = x.float()
+            x = x.view(*x.shape, 1)
+            t = t.view(-1)
+
             # Generator Training
             for _ in range(2):
                 # Random sequence
@@ -129,13 +147,13 @@ def joint_trainer(time_gan: TimeGAN,
 def time_gan_trainer(time_gan: TimeGAN, cfg: Dict) -> None:
     # Init all parameters and models
     dataset_name = cfg['system']['dataset']
-    sql_len = int(cfg['system']['seq_len'])
+    seq_len = int(cfg['system']['seq_len'])
     batch_size = int(cfg['system']['batch_size'])
     model_name = cfg['system']['model_name']
     device = cfg['system']['device']
     lr = float(cfg['system']['lr'])
 
-    ds_generator = GeneralDataset.GeneralDataset(sql_len, dataset_name, model_name)
+    ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
     ds = ds_generator.get_dataset()
 
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
@@ -173,7 +191,7 @@ if __name__ == '__main__':
     with open('config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
-    wandb.init(config=config, project='_timegan_baseline_', name=run_name)
+    # wandb.init(config=config, project='_timegan_baseline_', name=run_name)
 
     time_gan = TimeGAN(cfg=config)
     time_gan_trainer(time_gan=time_gan, cfg=config)
