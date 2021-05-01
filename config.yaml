@@ -1,12 +1,14 @@
 system:
   dataset: 'electricity'
-  sql_len: 150
+  seq_len: 150
   lr: 1e-4
   batch_size: 10
   model_name: 'timegan'
   device: 'cuda:0'
   padding_value: 0.0
   run_name: 'TimeGAN (baseline)'
+  jointly_num_epochs: 100
+
 d:
   dim_hidden: 32
   num_layers: 50
@@ -15,15 +17,18 @@ g:
   dim_latent: 128
   dim_hidden: 64
   num_layers: 50
+
 emb:
   dim_features: 1
   dim_hidden: 64
   num_layers: 50
+  num_epochs: 20
 
 sup:
   dim_features: 1
   dim_hidden: 64
   num_layers: 50
+  num_epochs: 20
 
 rec:
   dim_output: 1
