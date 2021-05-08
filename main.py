@@ -1,6 +1,13 @@
 from torch.optim import Optimizer, Adam
 import torch
-from TimeGAN import TimeGAN
+
+from Supervisor import Supervisor
+from Embedding import Embedding
+from Generator import Generator
+from Discriminator import Discriminator
+from Recovery import Recovery
+from TimeGAN import _recovery_forward, _supervisor_forward, _generator_forward, _discriminator_forward
+
 import numpy as np
 from typing import Dict
 from torch.utils.data import DataLoader
@@ -15,7 +22,9 @@ import wandb
 '''
 
 
-def embedding_trainer(time_gan: TimeGAN,
+def embedding_trainer(emb: Embedding,
+                      sup: Supervisor,
+                      rec: Recovery,
                       emb_opt: Optimizer,
                       rec_opt: Optimizer,
                       dl: DataLoader,
@@ -34,10 +43,12 @@ def embedding_trainer(time_gan: TimeGAN,
             t = t.view(-1)
 
             # Reset gradients
-            time_gan.zero_grad()
+            emb.zero_grad()
+            rec.zero_grad()
+            sup.zero_grad()
 
             # Forward Pass
-            _, e_loss0, e_loss_t0 = time_gan(x, t, None, "embedding")
+            _, e_loss0, e_loss_t0 = _recovery_forward(emb=emb, sup=sup, rec=rec, x=x, t=t)
             loss = np.sqrt(e_loss_t0.item())
 
             # Backward Pass
@@ -50,7 +61,8 @@ def embedding_trainer(time_gan: TimeGAN,
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
-def supervisor_trainer(time_gan: TimeGAN,
+def supervisor_trainer(emb: Embedding,
+                       sup: Supervisor,
                        sup_opt: Optimizer,
                        dl: DataLoader,
                        cfg: Dict) -> None:
@@ -67,10 +79,11 @@ def supervisor_trainer(time_gan: TimeGAN,
             t = t.view(-1)
 
             # Reset gradients
-            time_gan.zero_grad()
+            emb.zero_grad()
+            sup.zero_grad()
 
             # Forward Pass
-            sup_loss = time_gan(x, t, None, "supervisor")
+            sup_loss = _supervisor_forward(emb=emb, sup=sup, x=x, t=t)
 
             # Backward Pass
             sup_loss.backward()
@@ -82,7 +95,11 @@ def supervisor_trainer(time_gan: TimeGAN,
         print(f"[SUP] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
-def joint_trainer(time_gan: TimeGAN,
+def joint_trainer(emb: Embedding,
+                  sup: Supervisor,
+                  g: Generator,
+                  d: Discriminator,
+                  rec: Recovery,
                   g_opt: Optimizer,
                   d_opt: Optimizer,
                   sup_opt: Optimizer,
@@ -112,8 +129,13 @@ def joint_trainer(time_gan: TimeGAN,
                 z = torch.rand((batch_size, seq_len, dim_latent))
 
                 # Forward Pass (Generator)
-                time_gan.zero_grad()
-                g_loss = time_gan(x, t, z, "generator")
+                emb.zero_grad()
+                rec.zero_grad()
+                sup.zero_grad()
+                g.zero_grad()
+                d.zero_grad()
+
+                g_loss = _generator_forward(emb=emb, sup=sup, rec=rec, g=g, d=d, x=x, t=t, z=z)
                 g_loss.backward()
                 g_loss = np.sqrt(g_loss.item())
 
@@ -122,8 +144,11 @@ def joint_trainer(time_gan: TimeGAN,
                 sup_opt.step()
 
                 # Forward Pass (Embedding)
-                time_gan.zero_grad()
-                e_loss, _, e_loss_t0 = time_gan(x, t, z, "embedding")
+                emb.zero_grad()
+                rec.zero_grad()
+                sup.zero_grad()
+
+                e_loss, _, e_loss_t0 = _recovery_forward(emb=emb, rec=rec, sup=sup, x=x, t=t)
                 e_loss.backward()
                 e_loss = np.sqrt(e_loss.item())
 
@@ -135,9 +160,13 @@ def joint_trainer(time_gan: TimeGAN,
             z = torch.rand((batch_size, seq_len, dim_latent))
 
             # Discriminator Training
-            time_gan.zero_grad()
+            emb.zero_grad()
+            sup.zero_grad()
+            g.zero_grad()
+            d.zero_grad()
+
             # Forward Pass
-            d_loss = time_gan(x, t, z, "discriminator")
+            d_loss = _discriminator_forward(emb=emb, sup=sup, g=g, d=d, x=x, t=t, z=z)
 
             # Check Discriminator loss
             if d_loss > d_threshold:
@@ -148,10 +177,12 @@ def joint_trainer(time_gan: TimeGAN,
                 d_opt.step()
             d_loss = d_loss.item()
 
+        # Generate sample
+
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
 
-def time_gan_trainer(time_gan: TimeGAN, cfg: Dict) -> None:
+def time_gan_trainer(cfg: Dict) -> None:
     # Init all parameters and models
     dataset_name = cfg['system']['dataset']
     seq_len = int(cfg['system']['seq_len'])
@@ -164,30 +195,35 @@ def time_gan_trainer(time_gan: TimeGAN, cfg: Dict) -> None:
     ds = ds_generator.get_dataset()
 
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
-    time_gan.emb.to(device)
-    time_gan.g.to(device)
-    time_gan.d.to(device)
-    time_gan.rec.to(device)
-    time_gan.sup.to(device)
-    time_gan = time_gan.to(device)
+
+    # TimeGAN elements
+    emb = Embedding(cfg=cfg).to(device)
+    rec = Recovery(cfg=cfg).to(device)
+    sup = Supervisor(cfg=cfg).to(device)
+    g = Generator(cfg=cfg).to(device)
+    d = Discriminator(cfg=cfg).to(device)
 
     # Optimizers
     # TODO: see the behaviour and update lr with TTsUR if necessary
 
-    emb_opt = Adam(time_gan.emb.parameters(), lr=lr)
-    rec_opt = Adam(time_gan.rec.parameters(), lr=lr)
-    sup_opt = Adam(time_gan.sup.parameters(), lr=lr)
-    g_opt = Adam(time_gan.g.parameters(), lr=lr)
-    d_opt = Adam(time_gan.d.parameters(), lr=lr)
+    emb_opt = Adam(emb.parameters(), lr=lr)
+    rec_opt = Adam(rec.parameters(), lr=lr)
+    sup_opt = Adam(sup.parameters(), lr=lr)
+    g_opt = Adam(g.parameters(), lr=lr)
+    d_opt = Adam(d.parameters(), lr=lr)
 
     print(f"[EMB] Start Embedding network training")
-    embedding_trainer(time_gan=time_gan, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
+    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
 
     print(f"[SUP] Start Supervisor network training")
-    supervisor_trainer(time_gan=time_gan, sup_opt=sup_opt, dl=dl, cfg=cfg)
+    supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
 
     print(f"[JOINT] Start joint training")
-    joint_trainer(time_gan=time_gan,
+    joint_trainer(emb=emb,
+                  rec=rec,
+                  sup=sup,
+                  g=g,
+                  d=d,
                   emb_opt=emb_opt,
                   rec_opt=rec_opt,
                   sup_opt=sup_opt,
@@ -205,12 +241,10 @@ if __name__ == '__main__':
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
     # wandb.init(config=config, project='_timegan_baseline_', name=run_name)
 
-    time_gan = TimeGAN(cfg=config)
-    time_gan_trainer(time_gan=time_gan, cfg=config)
+    time_gan_trainer(cfg=config)
 
     # torch.save(time_gan.g.state_dict(), './trained_models/rcgan_g.pt')
     # torch.save(time_gan.d.state_dict(), './trained_models/rcgan_d.pt')
     #
     # time_gan.g = time_gan.g.to(config['system']['device'])
     # time_gan.d = time_gan.d.to(config['system']['device'])
-
