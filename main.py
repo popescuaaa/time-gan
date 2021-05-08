@@ -6,8 +6,8 @@ from Embedding import Embedding
 from Generator import Generator
 from Discriminator import Discriminator
 from Recovery import Recovery
-from TimeGAN import _recovery_forward, _supervisor_forward, _generator_forward, _discriminator_forward
-
+from TimeGAN import _recovery_forward, _supervisor_forward, _generator_forward, _discriminator_forward, _inference
+from utils import plot_time_series
 import numpy as np
 from typing import Dict
 from torch.utils.data import DataLoader
@@ -157,7 +157,7 @@ def joint_trainer(emb: Embedding,
                 rec_opt.step()
 
             # Random sequence
-            z = torch.rand((batch_size, seq_len, dim_latent))
+            z = torch.rand((batch_size, seq_len, dim_latent)).to(device)
 
             # Discriminator Training
             emb.zero_grad()
@@ -177,7 +177,12 @@ def joint_trainer(emb: Embedding,
                 d_opt.step()
             d_loss = d_loss.item()
 
-        # Generate sample
+            if idx == len(dl) - 1:
+                # Generate sample
+                sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
+                sample = sample.detach().cpu().numpy()
+                fig = plot_time_series(sample, 'Generated sample {}'.format(epoch))
+                print('Generated!')
 
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
