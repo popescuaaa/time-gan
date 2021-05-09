@@ -3,18 +3,30 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import json
 import torch
+from torch import Tensor
+from typing import Tuple
+from torchvision import transforms
+
+
+def normalize(t: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    # To use in reconstruction
+    return t.mean(), t.std(), (t - t.mean()) / t.std()
 
 
 class NIPSDataSet(Dataset):
     MODELS = ['timegan', 'rcgan']
 
-    def __init__(self, seq_len, data: np.ndarray, model: str, offset: int):
+    def __init__(self, seq_len, data: np.ndarray, model: str, offset: int, transform: bool = False):
         self.seq_len = seq_len
         self.raw_data = data
         self.model = model
         if self.model == 'timegan':
-            self.data = [torch.from_numpy(np.array(self.raw_data[i:i + self.seq_len]))
-                         for i in range(0, len(self.raw_data) - self.seq_len)]
+            if transform:
+                self.data = [normalize(torch.from_numpy(np.array(self.raw_data[i:i + self.seq_len])))
+                             for i in range(0, len(self.raw_data) - self.seq_len)]
+            else:
+                self.data = [torch.from_numpy(np.array(self.raw_data[i:i + self.seq_len]))
+                             for i in range(0, len(self.raw_data) - self.seq_len)]
 
             # Compute ∆t (deltas)
             self.data = self.data[:(len(self.data) - offset)]
@@ -92,8 +104,12 @@ class GeneralDataset:
         self.timestamps = self.data['start']
         self.values = self.data['target'].values
 
-    def get_dataset(self):
-        return NIPSDataSet(seq_len=self.seq_len, data=self.values[0], model=self.model, offset=self.offset)
+    def get_dataset(self, transform: bool = False):
+        return NIPSDataSet(seq_len=self.seq_len,
+                           data=self.values[0],
+                           model=self.model,
+                           offset=self.offset,
+                           transform=transform)
 
 
 if __name__ == '__main__':
@@ -105,4 +121,3 @@ if __name__ == '__main__':
         print(data)
         print(dt)
         break
-
