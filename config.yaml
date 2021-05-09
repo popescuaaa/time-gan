@@ -10,27 +10,27 @@ system:
   jointly_num_epochs: 100
 
 d:
-  dim_hidden: 32
-  num_layers: 50
-  treshold: 0.0
+  dim_hidden: 16
+  num_layers: 1
+  threshold: 0.0
 g:
   dim_latent: 128
-  dim_hidden: 64
-  num_layers: 50
+  dim_hidden: 16
+  num_layers: 1
 
 emb:
   dim_features: 1
-  dim_hidden: 64
-  num_layers: 50
+  dim_hidden: 16
+  num_layers: 1
   num_epochs: 20
 
 sup:
   dim_features: 1
-  dim_hidden: 64
-  num_layers: 50
+  dim_hidden: 16
+  num_layers: 1
   num_epochs: 20
 
 rec:
   dim_output: 1
-  dim_hidden: 64
-  num_layers: 50
+  dim_hidden: 16
+  num_layers: 1
