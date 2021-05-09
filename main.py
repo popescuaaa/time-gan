@@ -214,7 +214,7 @@ def time_gan_trainer(cfg: Dict) -> None:
     emb_opt = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
     sup_opt = Adam(sup.parameters(), lr=lr)
-    g_opt = Adam(g.parameters(), lr=lr)
+    g_opt = Adam(g.parameters(), lr=2 * lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
     print(f"[EMB] Start Embedding network training")
@@ -237,6 +237,19 @@ def time_gan_trainer(cfg: Dict) -> None:
                   dl=dl,
                   cfg=cfg)
 
+    # Move models to cpu
+    emb = emb.to('cpu')
+    rec = rec.to('cpu')
+    sup = sup.to('cpu')
+    g = g.to('cpu')
+    d = d.to('cpu')
+
+    torch.save(emb.state_dict(), 'emb.pt')
+    torch.save(rec.state_dict(), 'rec.pt')
+    torch.save(sup.state_dict(), 'sup.pt')
+    torch.save(g.state_dict(), 'g.pt')
+    torch.save(d.state_dict(), 'd.pt')
+
 
 if __name__ == '__main__':
     torch.random.manual_seed(42)
@@ -247,9 +260,3 @@ if __name__ == '__main__':
     # wandb.init(config=config, project='_timegan_baseline_', name=run_name)
 
     time_gan_trainer(cfg=config)
-
-    # torch.save(time_gan.g.state_dict(), './trained_models/rcgan_g.pt')
-    # torch.save(time_gan.d.state_dict(), './trained_models/rcgan_d.pt')
-    #
-    # time_gan.g = time_gan.g.to(config['system']['device'])
-    # time_gan.d = time_gan.d.to(config['system']['device'])
