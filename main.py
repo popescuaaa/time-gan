@@ -180,9 +180,18 @@ def joint_trainer(emb: Embedding,
             if idx == len(dl) - 1:
                 # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
-                sample = sample.detach().cpu().numpy()
-                fig = plot_time_series(sample, 'Generated sample {}'.format(epoch))
-                print('Generated!')
+                fake_sample = plot_time_series( sample.detach().cpu().numpy()[0].reahpe(seq_len),
+                                                'Generated sample {}'.format(epoch))
+                real_sample = fig = plot_time_series(x.detach().cpu().numpy()[0].reshape(seq_len),
+                                                     'Real sample {}'.format(epoch))
+                wandb.log({
+                        "epoch": epoch,
+                        "d loss": d_loss.detach().cpu(),
+                        "g loss": g_loss.detach().cpu().item(),
+                        "e loss": e_loss.detach().cpu().item(),
+                        "Fake sample": fake_sample,
+                        "Real sample": real_sample
+                    })
 
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
@@ -214,7 +223,7 @@ def time_gan_trainer(cfg: Dict) -> None:
     emb_opt = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
     sup_opt = Adam(sup.parameters(), lr=lr)
-    g_opt = Adam(g.parameters(), lr=2 * lr)
+    g_opt = Adam(g.parameters(), lr=lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
     print(f"[EMB] Start Embedding network training")
@@ -244,11 +253,11 @@ def time_gan_trainer(cfg: Dict) -> None:
     g = g.to('cpu')
     d = d.to('cpu')
 
-    torch.save(emb.state_dict(), 'emb.pt')
-    torch.save(rec.state_dict(), 'rec.pt')
-    torch.save(sup.state_dict(), 'sup.pt')
-    torch.save(g.state_dict(), 'g.pt')
-    torch.save(d.state_dict(), 'd.pt')
+    torch.save(emb.state_dict(), './trained_models/emb.pt')
+    torch.save(rec.state_dict(), './trained_models/rec.pt')
+    torch.save(sup.state_dict(), './trained_models/sup.pt')
+    torch.save(g.state_dict(), './trained_models/g.pt')
+    torch.save(d.state_dict(), './trained_models/d.pt')
 
 
 if __name__ == '__main__':
@@ -257,6 +266,6 @@ if __name__ == '__main__':
     with open('config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
-    # wandb.init(config=config, project='_timegan_baseline_', name=run_name)
+    wandb.init(config=config, project='_timegan_baseline_', name=run_name)
 
     time_gan_trainer(cfg=config)
