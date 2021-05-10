@@ -11,26 +11,26 @@ system:
 
 d:
   dim_hidden: 64
-  num_layers: 1
-  treshold: 0.0
+  num_layers: 10
+  threshold: 0.0
 g:
   dim_latent: 128
   dim_hidden: 64
-  num_layers: 1
+  num_layers: 10
 
 emb:
   dim_features: 1
   dim_hidden: 64
-  num_layers: 1
+  num_layers: 10
   num_epochs: 20
 
 sup:
   dim_features: 1
   dim_hidden: 64
-  num_layers: 1
+  num_layers: 10
   num_epochs: 20
 
 rec:
   dim_output: 1
   dim_hidden: 64
-  num_layers: 1
+  num_layers: 10
