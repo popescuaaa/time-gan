@@ -226,11 +226,11 @@ def time_gan_trainer(cfg: Dict) -> None:
     g_opt = Adam(g.parameters(), lr=lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
-    # print(f"[EMB] Start Embedding network training")
-    # embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
-    #
-    # print(f"[SUP] Start Supervisor network training")
-    # supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
+    print(f"[EMB] Start Embedding network training")
+    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
+
+    print(f"[SUP] Start Supervisor network training")
+    supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
 
     print(f"[JOINT] Start joint training")
     joint_trainer(emb=emb,
