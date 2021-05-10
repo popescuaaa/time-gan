@@ -126,7 +126,7 @@ def joint_trainer(emb: Embedding,
             # Generator Training
             for _ in range(2):
                 # Random sequence
-                z = torch.rand((batch_size, seq_len, dim_latent))
+                z = torch.rand((batch_size, seq_len, dim_latent)).to(device)
 
                 # Forward Pass (Generator)
                 emb.zero_grad()
