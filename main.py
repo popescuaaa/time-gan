@@ -180,18 +180,18 @@ def joint_trainer(emb: Embedding,
             if idx == len(dl) - 1:
                 # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
-                fake_sample = plot_time_series( sample.detach().cpu().numpy()[0].reahpe(seq_len),
-                                                'Generated sample {}'.format(epoch))
+                fake_sample = plot_time_series(sample.detach().cpu().numpy()[0].reshape(seq_len),
+                                               'Generated sample {}'.format(epoch))
                 real_sample = fig = plot_time_series(x.detach().cpu().numpy()[0].reshape(seq_len),
                                                      'Real sample {}'.format(epoch))
                 wandb.log({
-                        "epoch": epoch,
-                        "d loss": d_loss.detach().cpu(),
-                        "g loss": g_loss.detach().cpu().item(),
-                        "e loss": e_loss.detach().cpu().item(),
-                        "Fake sample": fake_sample,
-                        "Real sample": real_sample
-                    })
+                    "epoch": epoch,
+                    "d loss": d_loss.detach().cpu(),
+                    "g loss": g_loss.detach().cpu().item(),
+                    "e loss": e_loss.detach().cpu().item(),
+                    "Fake sample": fake_sample,
+                    "Real sample": real_sample
+                })
 
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
@@ -226,11 +226,11 @@ def time_gan_trainer(cfg: Dict) -> None:
     g_opt = Adam(g.parameters(), lr=lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
-    print(f"[EMB] Start Embedding network training")
-    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
-
-    print(f"[SUP] Start Supervisor network training")
-    supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
+    # print(f"[EMB] Start Embedding network training")
+    # embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
+    #
+    # print(f"[SUP] Start Supervisor network training")
+    # supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
 
     print(f"[JOINT] Start joint training")
     joint_trainer(emb=emb,
