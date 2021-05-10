@@ -186,9 +186,9 @@ def joint_trainer(emb: Embedding,
                                                      'Real sample {}'.format(epoch))
                 wandb.log({
                     "epoch": epoch,
-                    "d loss": d_loss.detach().cpu(),
-                    "g loss": g_loss.detach().cpu().item(),
-                    "e loss": e_loss.detach().cpu().item(),
+                    "d loss": d_loss.cpu(),
+                    "g loss": g_loss.cpu(),
+                    "e loss": e_loss.cpu(),
                     "Fake sample": fake_sample,
                     "Real sample": real_sample
                 })
