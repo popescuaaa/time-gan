@@ -75,7 +75,7 @@ class GeneralDataset:
         'solar': './data/solar_nips/train/train.json',
         'traffic': './data/traffic_nips/train/data.json',
         'exchange': './data/exchange_rate_nips/train/train.json',
-        'taxi': 'taxi_30min/train/train.json'
+        'taxi': './data/taxi_30min/train/train.json'
     }
 
     OFFSETS = {
