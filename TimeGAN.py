@@ -10,11 +10,27 @@ from Discriminator import Discriminator
 from Supervisor import Supervisor
 
 
-def _recovery_forward(emb: Embedding,
-                      sup: Supervisor,
-                      rec: Recovery,
-                      x: Tensor,
-                      t: Tensor) -> Tuple[Any, Any, Tensor]:
+def _embedding_forward_side(emb: Embedding,
+                            rec: Recovery,
+                            x: Tensor,
+                            t: Tensor):
+    assert x.device == emb.device, 'x and EMB are not on the same device'
+
+    # Forward pass
+    h = emb(x, t)
+    _x = rec(h, t)
+
+    e_loss_t0 = F.mse_loss(_x, x)
+    e_loss0 = 10 * torch.sqrt(e_loss_t0)
+
+    return e_loss0
+
+
+def _embedding_forward_main(emb: Embedding,
+                            sup: Supervisor,
+                            rec: Recovery,
+                            x: Tensor,
+                            t: Tensor) -> Tuple[Any, Any, Tensor]:
     assert x.device == emb.device, 'x and EMB are not on the same device'
 
     # Forward pass
@@ -154,4 +170,3 @@ def _inference(sup: Supervisor,
     # Synthetic generated data (reconstructed)
     _x = rec(_h, t)
     return _x
-
