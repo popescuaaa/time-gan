@@ -23,7 +23,7 @@ def _embedding_forward_side(emb: Embedding,
     e_loss_t0 = F.mse_loss(_x, x)
     e_loss0 = 10 * torch.sqrt(e_loss_t0)
 
-    return e_loss0
+    return e_loss0, _x
 
 
 def _embedding_forward_main(emb: Embedding,

@@ -12,7 +12,7 @@ from TimeGAN import _embedding_forward_main, \
     _generator_forward, \
     _discriminator_forward, \
     _inference
-from utils import plot_time_series
+from utils import plot_time_series, plot_two_time_series
 import numpy as np
 from typing import Dict
 from torch.utils.data import DataLoader
@@ -53,7 +53,7 @@ def embedding_trainer(emb: Embedding,
             sup.zero_grad()
 
             # Forward Pass
-            e_loss0 = _embedding_forward_side(emb=emb, rec=rec, x=x, t=t)
+            e_loss0, _x = _embedding_forward_side(emb=emb, rec=rec, x=x, t=t)
             loss = np.sqrt(e_loss0.item())
 
             # Backward Pass
@@ -63,6 +63,12 @@ def embedding_trainer(emb: Embedding,
             emb_opt.step()
             rec_opt.step()
 
+        wandb.log({
+            "embedding training epoch": epoch,
+            "e0 loss": e_loss0,
+            "Data reconstruction": plot_two_time_series(x.detach().cpu().numpy()[0, :, 0],
+                                                        _x.detach().cpu().numpy()[0, :, 0]),
+        })
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
