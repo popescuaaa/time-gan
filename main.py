@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from data import GeneralDataset
 import yaml
 import wandb
+import argparse
 
 '''
     
@@ -219,11 +220,10 @@ def time_gan_trainer(cfg: Dict) -> None:
 
     # Optimizers
     # TODO: see the behaviour and update lr with TTsUR if necessary
-
     emb_opt = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
     sup_opt = Adam(sup.parameters(), lr=lr)
-    g_opt = Adam(g.parameters(), lr=lr)
+    g_opt = Adam(g.parameters(), lr=2 * lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
     print(f"[EMB] Start Embedding network training")
@@ -261,9 +261,16 @@ def time_gan_trainer(cfg: Dict) -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'config',
+        choices=['electricity', 'solar', 'exchange', 'traffic', 'taxi'],
+        default='electricity',
+        type=str)
+    args = parser.parse_args()
+    print(args.config)
     torch.random.manual_seed(42)
-
-    with open('config.yaml', 'r') as f:
+    with open('config/_config_{}.yaml'.format(args.config), 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
     wandb.init(config=config, project='_timegan_baseline_', name=run_name)
