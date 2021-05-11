@@ -6,12 +6,17 @@ from Embedding import Embedding
 from Generator import Generator
 from Discriminator import Discriminator
 from Recovery import Recovery
-from TimeGAN import _recovery_forward, _supervisor_forward, _generator_forward, _discriminator_forward, _inference
+from TimeGAN import _embedding_forward_main, \
+    _embedding_forward_side, \
+    _supervisor_forward, \
+    _generator_forward, \
+    _discriminator_forward, \
+    _inference
 from utils import plot_time_series
 import numpy as np
 from typing import Dict
 from torch.utils.data import DataLoader
-from data import GeneralDataset
+from data import Energy
 import yaml
 import wandb
 import argparse
@@ -35,13 +40,12 @@ def embedding_trainer(emb: Embedding,
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
-            x, t = real_data
+            x = real_data
+            t, _ = Energy.extract_time(real_data)
 
             x = x.float()
-            x = x.view(*x.shape, 1)
+            x = x.view(*x.shape)
             x = x.to(device)
-
-            t = t.view(-1)
 
             # Reset gradients
             emb.zero_grad()
@@ -49,8 +53,8 @@ def embedding_trainer(emb: Embedding,
             sup.zero_grad()
 
             # Forward Pass
-            _, e_loss0, e_loss_t0 = _recovery_forward(emb=emb, sup=sup, rec=rec, x=x, t=t)
-            loss = np.sqrt(e_loss_t0.item())
+            e_loss0 = _embedding_forward_side(emb=emb, rec=rec, x=x, t=t)
+            loss = np.sqrt(e_loss0.item())
 
             # Backward Pass
             e_loss0.backward()
@@ -72,12 +76,12 @@ def supervisor_trainer(emb: Embedding,
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
-            x, t = real_data
+            x = real_data
+            t, _ = Energy.extract_time(real_data)
 
             x = x.float()
-            x = x.view(*x.shape, 1)
+            x = x.view(*x.shape)
             x = x.to(device)
-            t = t.view(-1)
 
             # Reset gradients
             emb.zero_grad()
@@ -117,17 +121,17 @@ def joint_trainer(emb: Embedding,
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
-            x, t = real_data
+            x = real_data
+            t, _ = Energy.extract_time(real_data)
 
             x = x.float()
-            x = x.view(*x.shape, 1)
+            x = x.view(*x.shape)
             x = x.to(device)
-            t = t.view(-1)
 
             # Generator Training
             for _ in range(2):
                 # Random sequence
-                z = torch.rand((batch_size, seq_len, dim_latent)).to(device)
+                z = torch.randn_like(x)
 
                 # Forward Pass (Generator)
                 emb.zero_grad()
@@ -149,7 +153,7 @@ def joint_trainer(emb: Embedding,
                 rec.zero_grad()
                 sup.zero_grad()
 
-                e_loss, _, e_loss_t0 = _recovery_forward(emb=emb, rec=rec, sup=sup, x=x, t=t)
+                e_loss, _, e_loss_t0 = _embedding_forward_main(emb=emb, rec=rec, sup=sup, x=x, t=t)
                 e_loss.backward()
                 e_loss = np.sqrt(e_loss.item())
 
@@ -158,7 +162,7 @@ def joint_trainer(emb: Embedding,
                 rec_opt.step()
 
             # Random sequence
-            z = torch.rand((batch_size, seq_len, dim_latent)).to(device)
+            z = torch.randn_like(x)
 
             # Discriminator Training
             emb.zero_grad()
@@ -181,10 +185,10 @@ def joint_trainer(emb: Embedding,
             if idx == len(dl) - 1:
                 # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
-                fake_sample = plot_time_series(sample.detach().cpu().numpy()[0].reshape(seq_len),
+                fake_sample = plot_time_series(sample.detach().cpu().numpy()[0, :, 0],
                                                'Generated sample {}'.format(epoch))
-                real_sample = fig = plot_time_series(x.detach().cpu().numpy()[0].reshape(seq_len),
-                                                     'Real sample {}'.format(epoch))
+                real_sample = plot_time_series(x.detach().cpu().numpy()[0, :, 0],
+                                               'Real sample {}'.format(epoch))
                 wandb.log({
                     "epoch": epoch,
                     "d loss": d_loss,
@@ -199,16 +203,15 @@ def joint_trainer(emb: Embedding,
 
 def time_gan_trainer(cfg: Dict) -> None:
     # Init all parameters and models
-    dataset_name = cfg['system']['dataset']
     seq_len = int(cfg['system']['seq_len'])
     batch_size = int(cfg['system']['batch_size'])
-    model_name = cfg['system']['model_name']
     device = torch.device(cfg['system']['device'])
+
     lr = float(cfg['system']['lr'])
+    # ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
+    # ds = ds_generator.get_dataset()
 
-    ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
-    ds = ds_generator.get_dataset()
-
+    ds = Energy.Energy(seq_len)
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
 
     # TimeGAN elements
@@ -220,14 +223,15 @@ def time_gan_trainer(cfg: Dict) -> None:
 
     # Optimizers
     # TODO: see the behaviour and update lr with TTsUR if necessary
-    emb_opt = Adam(emb.parameters(), lr=lr)
+    emb_opt_side = Adam(emb.parameters(), lr=lr)
+    emb_opt_main = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
     sup_opt = Adam(sup.parameters(), lr=lr)
-    g_opt = Adam(g.parameters(), lr=2 * lr)
+    g_opt = Adam(g.parameters(), lr=lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
     print(f"[EMB] Start Embedding network training")
-    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt, rec_opt=rec_opt, dl=dl, cfg=cfg)
+    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
 
     print(f"[SUP] Start Supervisor network training")
     supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
@@ -238,7 +242,7 @@ def time_gan_trainer(cfg: Dict) -> None:
                   sup=sup,
                   g=g,
                   d=d,
-                  emb_opt=emb_opt,
+                  emb_opt=emb_opt_main,
                   rec_opt=rec_opt,
                   sup_opt=sup_opt,
                   g_opt=g_opt,
@@ -261,16 +265,16 @@ def time_gan_trainer(cfg: Dict) -> None:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'config',
-        choices=['electricity', 'solar', 'exchange', 'traffic', 'taxi'],
-        default='electricity',
-        type=str)
-    args = parser.parse_args()
-    print(args.config)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument(
+    #     'config',
+    #     choices=['electricity', 'solar', 'exchange', 'traffic', 'taxi'],
+    #     default='electricity',
+    #     type=str)
+    # args = parser.parse_args()
+    # print(args.config)
     torch.random.manual_seed(42)
-    with open('config/_config_{}.yaml'.format(args.config), 'r') as f:
+    with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
     wandb.init(config=config, project='_timegan_baseline_', name=run_name)
