@@ -7,7 +7,7 @@ system:
   device: 'cuda:0'
   padding_value: 0.0
   run_name: 'TimeGAN (baseline)'
-  jointly_num_epochs: 50
+  jointly_num_epochs: 100
 
 d:
   dim_hidden: 24
@@ -22,13 +22,13 @@ emb:
   dim_features: 28
   dim_hidden: 24
   num_layers: 3
-  num_epochs: 20
+  num_epochs: 100
 
 sup:
   dim_features: 1
   dim_hidden: 24
   num_layers: 3
-  num_epochs: 20
+  num_epochs: 100
 
 rec:
   dim_output: 28
