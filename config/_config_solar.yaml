@@ -1,0 +1,36 @@
+system:
+  dataset: 'solar'
+  seq_len: 150
+  lr: 1e-4
+  batch_size: 10
+  model_name: 'timegan'
+  device: 'cuda:0'
+  padding_value: 0.0
+  run_name: 'TimeGAN (baseline)'
+  jointly_num_epochs: 50
+
+d:
+  dim_hidden: 100
+  num_layers: 5
+  threshold: 0.0
+g:
+  dim_latent: 128
+  dim_hidden: 100
+  num_layers: 5
+
+emb:
+  dim_features: 1
+  dim_hidden: 100
+  num_layers: 5
+  num_epochs: 20
+
+sup:
+  dim_features: 1
+  dim_hidden: 100
+  num_layers: 5
+  num_epochs: 20
+
+rec:
+  dim_output: 1
+  dim_hidden: 100
+  num_layers: 5
