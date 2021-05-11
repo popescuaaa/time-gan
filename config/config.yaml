@@ -1,8 +1,8 @@
 system:
-  dataset: 'electricity'
-  seq_len: 150
+  dataset: 'energy'
+  seq_len: 24
   lr: 1e-4
-  batch_size: 10
+  batch_size: 128
   model_name: 'timegan'
   device: 'cuda:0'
   padding_value: 0.0
@@ -10,27 +10,27 @@ system:
   jointly_num_epochs: 50
 
 d:
-  dim_hidden: 100
-  num_layers: 5
-  threshold: 0.0
+  dim_hidden: 24
+  num_layers: 3
+  threshold: 0.5
 g:
-  dim_latent: 128
-  dim_hidden: 100
-  num_layers: 5
+  dim_latent: 28
+  dim_hidden: 24
+  num_layers: 3
 
 emb:
-  dim_features: 1
-  dim_hidden: 100
-  num_layers: 5
+  dim_features: 28
+  dim_hidden: 24
+  num_layers: 3
   num_epochs: 20
 
 sup:
   dim_features: 1
-  dim_hidden: 100
-  num_layers: 5
+  dim_hidden: 24
+  num_layers: 3
   num_epochs: 20
 
 rec:
-  dim_output: 1
-  dim_hidden: 100
-  num_layers: 5
+  dim_output: 28
+  dim_hidden: 24
+  num_layers: 3
