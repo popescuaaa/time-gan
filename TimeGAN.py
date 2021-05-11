@@ -13,7 +13,7 @@ from Supervisor import Supervisor
 def _embedding_forward_side(emb: Embedding,
                             rec: Recovery,
                             x: Tensor,
-                            t: Tensor):
+                            t: Tensor) -> Tuple[Tensor, Tensor]:
     assert x.device == emb.device, 'x and EMB are not on the same device'
 
     # Forward pass
@@ -57,7 +57,7 @@ def _embedding_forward_main(emb: Embedding,
 def _supervisor_forward(emb: Embedding,
                         sup: Supervisor,
                         x: Tensor,
-                        t: Tensor) -> Tensor:
+                        t: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     assert x.device == emb.device, 'x and EMB are not on the same device'
 
     # Supervisor forward pass
@@ -72,7 +72,7 @@ def _supervisor_forward(emb: Embedding,
         h[:, 1:, :]
     )
 
-    return s_loss
+    return s_loss, h, _h_sup
 
 
 def _discriminator_forward(emb: Embedding,

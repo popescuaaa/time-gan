@@ -15,17 +15,19 @@ from TimeGAN import _embedding_forward_main, \
 from utils import plot_time_series, plot_two_time_series
 import numpy as np
 from typing import Dict
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from data import Energy
 import yaml
 import wandb
-import argparse
+from metrics import visualisation
 
 '''
     
     Trainers
     
 '''
+
+LOGGING_STEP = 0
 
 
 def embedding_trainer(emb: Embedding,
@@ -35,6 +37,7 @@ def embedding_trainer(emb: Embedding,
                       rec_opt: Optimizer,
                       dl: DataLoader,
                       cfg: Dict) -> None:
+    global LOGGING_STEP
     num_epochs = int(cfg['emb']['num_epochs'])
     device = torch.device(cfg['system']['device'])
 
@@ -63,12 +66,14 @@ def embedding_trainer(emb: Embedding,
             emb_opt.step()
             rec_opt.step()
 
-        wandb.log({
-            "embedding training epoch": epoch,
-            "e0 loss": e_loss0,
-            "Data reconstruction": plot_two_time_series(x.detach().cpu().numpy()[0, :, 0],
-                                                        _x.detach().cpu().numpy()[0, :, 0]),
-        })
+            if idx == len(dl) - 1:
+                wandb.log({
+                    "embedding training epoch": epoch,
+                    "e0 loss": e_loss0,
+                    "Data reconstruction": plot_two_time_series(x.detach().cpu().numpy()[0, :, 0],
+                                                                _x.detach().cpu().numpy()[0, :, 0]),
+                }, step=LOGGING_STEP)
+                LOGGING_STEP += 1
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
@@ -77,6 +82,7 @@ def supervisor_trainer(emb: Embedding,
                        sup_opt: Optimizer,
                        dl: DataLoader,
                        cfg: Dict) -> None:
+    global LOGGING_STEP
     num_epochs = int(cfg['sup']['num_epochs'])
     device = torch.device(cfg['system']['device'])
 
@@ -94,7 +100,7 @@ def supervisor_trainer(emb: Embedding,
             sup.zero_grad()
 
             # Forward Pass
-            sup_loss = _supervisor_forward(emb=emb, sup=sup, x=x, t=t)
+            sup_loss, h, _h_sup = _supervisor_forward(emb=emb, sup=sup, x=x, t=t)
 
             # Backward Pass
             sup_loss.backward()
@@ -103,6 +109,17 @@ def supervisor_trainer(emb: Embedding,
             # Update model parameters
             sup_opt.step()
 
+            if idx == len(dl) - 1:
+                wandb.log({
+                    "supervisor training epoch": epoch,
+                    "supervisor loss": sup_loss,
+                    "Temporal dynamics [ teacher forcing ] on latent representation":
+                        plot_two_time_series(
+                            h.detach().cpu().numpy()[0, :, 0],
+                            _h_sup.detach().cpu().numpy()[0, :, 0]),
+
+                }, step=LOGGING_STEP)
+                LOGGING_STEP += 1
         print(f"[SUP] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
@@ -117,7 +134,9 @@ def joint_trainer(emb: Embedding,
                   rec_opt: Optimizer,
                   emb_opt: Optimizer,
                   dl: DataLoader,
-                  cfg: Dict) -> None:
+                  cfg: Dict,
+                  real_distribution: np.ndarray) -> None:
+    global LOGGING_STEP
     num_epochs = int(cfg['system']['jointly_num_epochs'])
     batch_size = int(cfg['system']['batch_size'])
     seq_len = int(cfg['system']['seq_len'])
@@ -195,14 +214,31 @@ def joint_trainer(emb: Embedding,
                                                'Generated sample {}'.format(epoch))
                 real_sample = plot_time_series(x.detach().cpu().numpy()[0, :, 0],
                                                'Real sample {}'.format(epoch))
+
+                # Generate a balanced distribution
+                real_distribution = torch.from_numpy(np.array(real_distribution)).float()
+                z = torch.randn_like(real_distribution.to(device))
+                generated_distribution = _inference(sup=sup,
+                                                    g=g,
+                                                    rec=rec,
+                                                    z=z,
+                                                    t=torch.from_numpy(np.array(
+                                                        Energy.extract_time(real_distribution)[0]
+                                                    )))
+                generated_distribution = generated_distribution.detach().cpu().view(1, -1).numpy()
+                real_distribution = real_distribution.view(1, -1).numpy()
+                dist_fig = visualisation.visualize(generated_distribution,
+                                                   real_distribution)
                 wandb.log({
                     "epoch": epoch,
                     "d loss": d_loss,
                     "g loss": g_loss,
                     "e loss": e_loss,
                     "Fake sample": fake_sample,
-                    "Real sample": real_sample
-                })
+                    "Real sample": real_sample,
+                    "Distribution": dist_fig
+                }, LOGGING_STEP)
+                LOGGING_STEP += 1
 
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
@@ -254,7 +290,8 @@ def time_gan_trainer(cfg: Dict) -> None:
                   g_opt=g_opt,
                   d_opt=d_opt,
                   dl=dl,
-                  cfg=cfg)
+                  cfg=cfg,
+                  real_distribution=ds.get_distribution())
 
     # Move models to cpu
     emb = emb.to('cpu')

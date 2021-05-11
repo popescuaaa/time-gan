@@ -38,6 +38,9 @@ class Energy(Dataset):
     def __getitem__(self, item):
         return self.data[item]
 
+    def get_distribution(self):
+        return self.data
+
 
 if __name__ == '__main__':
     ds = Energy(24)
