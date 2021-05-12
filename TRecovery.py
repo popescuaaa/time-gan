@@ -8,7 +8,6 @@ from typing import Dict
 class TRecoveryDecoder(nn.Module):
     """
     Recovery implemented with decoder model
-    TODO: test out shape (dunno if is fixed size)
     """
 
     def __init__(self, cfg: Dict):
@@ -25,25 +24,28 @@ class TRecoveryDecoder(nn.Module):
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
                                                      dim_feedforward=self.feature_size * 4)
-        self.encoder = TransformerDecoder(decoder_layer=self.decoder_layer, num_layers=self.num_layers)
-        self.decoder = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
+        self.decoder = TransformerDecoder(decoder_layer=self.decoder_layer, num_layers=self.num_layers)
+        self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
         # Init weights
         init_range = 0.1
         self.decoder.bias.data.zero_()
         self.decoder.weight.data.uniform_(-init_range, init_range)
 
-    def forward(self, tgt: Tensor, memory: Tensor, memory_mask: Tensor) -> Tensor:
-        pass
+    def forward(self, tgt: Tensor, memory: Tensor) -> Tensor:
+        tgt = self.pos_encoder(tgt)
+        output = self.decoder(tgt, memory)
+        output = self.ll(output)
+        return output
 
 
-class TRecovery(nn.Module):
+class TRecoveryEncoder(nn.Module):
     """
     Recovery implemented with decoder model
     """
 
     def __init__(self, cfg: Dict):
-        super(TRecovery, self).__init__()
+        super(TRecoveryEncoder, self).__init__()
         self.feature_size = int(cfg['t_rec']['feature_size'])
         self.num_layers = int(cfg['t_rec']['num_layers'])
         self.dropout = float(cfg['t_rec']['dropout'])
