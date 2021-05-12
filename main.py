@@ -139,7 +139,7 @@ def joint_trainer(emb: Embedding,
                   emb_opt: Optimizer,
                   dl: DataLoader,
                   cfg: Dict,
-                  real_distribution: np.ndarray) -> None:
+                  real_samples: np.ndarray) -> None:
     global LOGGING_STEP
     num_epochs = int(cfg['system']['jointly_num_epochs'])
     batch_size = int(cfg['system']['batch_size'])
@@ -220,14 +220,23 @@ def joint_trainer(emb: Embedding,
                                                'Real sample {}'.format(epoch))
 
                 # Generate a balanced distribution
-                generated_distribution = []
-                for _ in range(len(real_distribution)):
+                generated_samples = []
+                for _ in range(len(real_samples)):
                     sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
-                    generated_distribution.append(sample.detach().cpu().numpy()[0, :, :])
+                    generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
 
-                dist_fig = visualisation.visualize(torch.from_numpy(np.array(real_distribution)).view(1, -1).numpy(),
-                                                   torch.from_numpy(np.array(generated_distribution)).view(1,
-                                                                                                           -1).numpy())
+                real_samples = torch.from_numpy(np.array(real_samples))
+                real_samples = real_samples.view(real_samples.shape[0],
+                                                 real_samples.shape[1] * real_samples.shape[2])
+
+                generated_samples = torch.from_numpy(np.array(generated_samples))
+                generated_samples = generated_samples.view(generated_samples.shape[0],
+                                                           generated_samples.shape[1] * generated_samples.shape[2])
+                print(real_samples.shape)
+                print(generated_samples.shape)
+
+                dist_fig = visualisation.visualize(real_samples.numpy(),
+                                                   generated_samples.numpy())
 
                 LOGGING_STEP += 1
                 wandb.log({
@@ -272,11 +281,11 @@ def time_gan_trainer(cfg: Dict) -> None:
     g_opt = Adam(g.parameters(), lr=lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
-    print(f"[EMB] Start Embedding network training")
-    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
-
-    print(f"[SUP] Start Supervisor network training")
-    supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
+    # print(f"[EMB] Start Embedding network training")
+    # embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
+    #
+    # print(f"[SUP] Start Supervisor network training")
+    # supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
 
     print(f"[JOINT] Start joint training")
     joint_trainer(emb=emb,
@@ -291,7 +300,7 @@ def time_gan_trainer(cfg: Dict) -> None:
                   d_opt=d_opt,
                   dl=dl,
                   cfg=cfg,
-                  real_distribution=ds.get_distribution())
+                  real_samples=ds.get_distribution())
 
     # Move models to cpu
     emb = emb.to('cpu')
@@ -300,6 +309,7 @@ def time_gan_trainer(cfg: Dict) -> None:
     g = g.to('cpu')
     d = d.to('cpu')
 
+    # Save models
     torch.save(emb.state_dict(), './trained_models/emb.pt')
     torch.save(rec.state_dict(), './trained_models/rec.pt')
     torch.save(sup.state_dict(), './trained_models/sup.pt')
