@@ -62,12 +62,12 @@ class TRecoveryEncoder(nn.Module):
                                                      dropout=self.dropout,
                                                      dim_feedforward=self.feature_size * 4)
         self.encoder = TransformerEncoder(encoder_layer=self.encoder_layer, num_layers=self.num_layers)
-        self.decoder = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
+        self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
         # Init weights
         init_range = 0.1
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-init_range, init_range)
+        self.ll.bias.data.zero_()
+        self.ll.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, src: Tensor) -> Tensor:
         if self.src_mask is None or self.src_mask.size(0) != len(src):
@@ -77,7 +77,7 @@ class TRecoveryEncoder(nn.Module):
 
         src = self.pos_encoder(src)
         output = self.encoder(src, self.src_mask)
-        output = self.decoder(output)
+        output = self.ll(output)
         return output
 
     @property
