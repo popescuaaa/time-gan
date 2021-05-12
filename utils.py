@@ -27,10 +27,13 @@ def plot_time_series(ts: np.ndarray, figure_name):
 """
 
 
-def plot_two_time_series(real: np.ndarray, reconstructed: np.ndarray):
+def plot_two_time_series(real: np.ndarray,
+                         real_data_description: str,
+                         reconstructed: np.ndarray,
+                         reconstructed_data_description: str):
     time = [i for i in range(len(real))]
-    trace1 = go.Scatter(x=time, y=real, name="Real time series")
-    trace2 = go.Scatter(x=time, y=reconstructed, name="Reconstructed time series")
+    trace1 = go.Scatter(x=time, y=real, name=real_data_description)
+    trace2 = go.Scatter(x=time, y=reconstructed, name=reconstructed_data_description)
     fig = make_subplots(rows=1, cols=2)
     fig.add_trace(trace1, row=1, col=1)
     fig.add_trace(trace2, row=1, col=2)

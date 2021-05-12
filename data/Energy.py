@@ -10,7 +10,7 @@ def MinMaxScaler(data: np.ndarray) -> np.ndarray:
 
 
 def extract_time(data: np.ndarray):
-    time = list()
+    time = []
     max_seq_len = 0
     for i in range(len(data)):
         max_seq_len = max(max_seq_len, len(data[i][:, 0]))
