@@ -120,7 +120,7 @@ if __name__ == '__main__':
             'num_layers': 10,
             'dropout': 0.1,
             'n_head': 7,
-            'dim_output': 28
+            'dim_output': 14
         }
     }
     emb = Encoder(cfg=cfg)
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 
     cfg = {
         'transformer': {
-            'feature_size': 28,
+            'feature_size': 14,
             'num_layers': 10,
             'dropout': 0.1,
             'n_head': 7,
