@@ -15,7 +15,7 @@ from TimeGAN import _embedding_forward_main, \
 from utils import plot_time_series, plot_two_time_series
 import numpy as np
 from typing import Dict
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from data import Energy
 import yaml
 import wandb
@@ -148,6 +148,11 @@ def joint_trainer(emb: Embedding,
     d_threshold = float(cfg['d']['threshold'])
     device = torch.device(cfg['system']['device'])
 
+    real_samples_tensor = torch.from_numpy(np.array(real_samples))
+    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
+                                                   real_samples_tensor.shape[1] * \
+                                                   real_samples_tensor.shape[2])
+
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
             x = real_data
@@ -222,21 +227,17 @@ def joint_trainer(emb: Embedding,
                 # Generate a balanced distribution
                 generated_samples = []
                 for _ in range(len(real_samples)):
-                    sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
+                    _z = torch.randn_like(x)
+                    sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=t)
                     generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
 
-                real_samples = torch.from_numpy(np.array(real_samples))
-                real_samples = real_samples.view(real_samples.shape[0],
-                                                 real_samples.shape[1] * real_samples.shape[2])
+                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
+                generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                                                                         generated_samples_tensor.shape[1] * \
+                                                                         generated_samples_tensor.shape[2])
 
-                generated_samples = torch.from_numpy(np.array(generated_samples))
-                generated_samples = generated_samples.view(generated_samples.shape[0],
-                                                           generated_samples.shape[1] * generated_samples.shape[2])
-                print(real_samples.shape)
-                print(generated_samples.shape)
-
-                dist_fig = visualisation.visualize(real_samples.numpy(),
-                                                   generated_samples.numpy())
+                dist_fig = visualisation.visualize(real_samples_tensor.numpy(),
+                                                   generated_samples_tensor.numpy())
 
                 LOGGING_STEP += 1
                 wandb.log({
@@ -281,11 +282,11 @@ def time_gan_trainer(cfg: Dict) -> None:
     g_opt = Adam(g.parameters(), lr=lr)
     d_opt = Adam(d.parameters(), lr=lr)
 
-    # print(f"[EMB] Start Embedding network training")
-    # embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
-    #
-    # print(f"[SUP] Start Supervisor network training")
-    # supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
+    print(f"[EMB] Start Embedding network training")
+    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
+
+    print(f"[SUP] Start Supervisor network training")
+    supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
 
     print(f"[JOINT] Start joint training")
     joint_trainer(emb=emb,
@@ -318,14 +319,6 @@ def time_gan_trainer(cfg: Dict) -> None:
 
 
 if __name__ == '__main__':
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument(
-    #     'config',
-    #     choices=['electricity', 'solar', 'exchange', 'traffic', 'taxi'],
-    #     default='electricity',
-    #     type=str)
-    # args = parser.parse_args()
-    # print(args.config)
     torch.random.manual_seed(42)
     with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
