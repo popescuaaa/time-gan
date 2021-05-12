@@ -10,6 +10,7 @@ from data import Energy
 from torch.utils.data import DataLoader
 from utils import plot_two_time_series
 
+
 class PositionalEncoding(nn.Module):
     def __init__(self, dim_model: int, max_seq_len: int = 1000):
         super(PositionalEncoding, self).__init__()
@@ -31,9 +32,9 @@ def _generate_square_subsequent_mask(sz: int) -> Tensor:
     return mask
 
 
-class Transformer(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, cfg: Dict):
-        super(Transformer, self).__init__()
+        super(Encoder, self).__init__()
         self.feature_size = int(cfg['transformer']['feature_size'])
         self.num_layers = int(cfg['transformer']['num_layers'])
         self.dropout = float(cfg['transformer']['dropout'])
@@ -45,7 +46,10 @@ class Transformer(nn.Module):
 
         # Architecture
         self.pos_encoder = PositionalEncoding(dim_model=self.feature_size)
-        self.encoder_layer = TransformerEncoderLayer(d_model=self.feature_size, nhead=self.n_head, dropout=self.dropout)
+        self.encoder_layer = TransformerEncoderLayer(d_model=self.feature_size,
+                                                     nhead=self.n_head,
+                                                     dropout=self.dropout,
+                                                     dim_feedforward=self.feature_size * 4)
         self.encoder = TransformerEncoder(encoder_layer=self.encoder_layer, num_layers=self.num_layers)
         self.decoder = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
@@ -89,15 +93,15 @@ def run_transformer_test():
             'dim_output': 1
         }
     }
-    t = Transformer(cfg=cfg)
+    t = Encoder(cfg=cfg)
     src = torch.randn(size=(128, 24, 28))
     out = t(src)
     assert out.shape == torch.Size((128, 24, 1)), 'Transformer failed to produce correct output shape'
 
 
 # Training step
-def _embedding_forward_step(emb: Transformer,
-                            rec: Transformer,
+def _embedding_forward_step(emb: Encoder,
+                            rec: Encoder,
                             src: Tensor):
     assert src.device == emb.device, 'Src and model are not on the same device'
     h = emb(src)
@@ -113,34 +117,33 @@ if __name__ == '__main__':
     cfg = {
         'transformer': {
             'feature_size': 28,
-            'num_layers': 1,
-            'dropout': 0.1,
-            'n_head': 7,
-            'dim_output': 14
-        }
-    }
-    emb = Transformer(cfg=cfg)
-    emb_opt = torch.optim.Adam(emb.parameters(), lr=1e-4)
-
-    cfg = {
-        'transformer': {
-            'feature_size': 14,
-            'num_layers': 1,
+            'num_layers': 10,
             'dropout': 0.1,
             'n_head': 7,
             'dim_output': 28
         }
     }
-    rec = Transformer(cfg=cfg)
+    emb = Encoder(cfg=cfg)
+    emb_opt = torch.optim.Adam(emb.parameters(), lr=1e-4)
+
+    cfg = {
+        'transformer': {
+            'feature_size': 28,
+            'num_layers': 10,
+            'dropout': 0.1,
+            'n_head': 7,
+            'dim_output': 28
+        }
+    }
+    rec = Encoder(cfg=cfg)
     rec_opt = torch.optim.Adam(rec.parameters(), lr=1e-4)
     device = torch.device('cuda:0')
 
     emb = emb.to(device)
     rec = rec.to(device)
 
-
     # Logging
-    wandb.init(config=cfg, project='_transformer_test_', name='Transformer test [ energy ]')
+    # wandb.init(config=cfg, project='_transformer_test_', name='Transformer test [ energy ]')
 
     for epoch in range(100):
         for i, e in enumerate(dl):
@@ -162,15 +165,11 @@ if __name__ == '__main__':
                                        real_data_description='Real data',
                                        reconstructed=_src,
                                        reconstructed_data_description='Reconstructed data')
-            if i == len(dl) - 1:
-                wandb.log({
-                    'epoch': epoch,
-                    'loss': loss,
-                    'Embedding result': fig
-                })
+            # if i == len(dl) - 1:
+            #     wandb.log({
+            #         'epoch': epoch,
+            #         'loss': loss,
+            #         'Embedding result': fig
+            #     })
 
         print(f"[T_EMB] Epoch: {epoch}, Loss: {loss:.4f}")
-
-
-
-
