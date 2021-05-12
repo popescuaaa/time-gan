@@ -1,0 +1,1 @@
+for i in $(seq 5 50); do python3 main.py --perplexity=$i; done

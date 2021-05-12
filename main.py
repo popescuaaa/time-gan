@@ -20,6 +20,8 @@ from data import Energy
 import yaml
 import wandb
 from metrics import visualisation
+import argparse
+
 
 '''
     
@@ -321,9 +323,15 @@ def time_gan_trainer(cfg: Dict) -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--perplexity', type=int, required=True)
+    args = parser.parse_args()
+
     torch.random.manual_seed(42)
     with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
+
+    config['system']['perplexity'] = args.perplexity
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
     wandb.init(config=config, project='_timegan_baseline_', name=run_name)
 
