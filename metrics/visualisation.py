@@ -3,10 +3,10 @@ from sklearn.manifold import TSNE
 import numpy as np
 
 
-def visualize(generated_data: np.ndarray, real_data: np.ndarray):
+def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int):
     # Do t-SNE Analysis together
     processed_data = np.concatenate((real_data, generated_data), axis=0)
-    t_sne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
+    t_sne = TSNE(n_components=2, verbose=1, perplexity=perplexity, n_iter=300)
     t_sne_results = t_sne.fit_transform(processed_data)
 
     size = len(real_data)

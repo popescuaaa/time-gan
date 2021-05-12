@@ -147,6 +147,7 @@ def joint_trainer(emb: Embedding,
     dim_latent = int(cfg['g']['dim_latent'])
     d_threshold = float(cfg['d']['threshold'])
     device = torch.device(cfg['system']['device'])
+    perplexity = int(cfg['system']['perplexity'])
 
     real_samples_tensor = torch.from_numpy(np.array(real_samples))
     real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
@@ -236,8 +237,9 @@ def joint_trainer(emb: Embedding,
                                                                          generated_samples_tensor.shape[1] * \
                                                                          generated_samples_tensor.shape[2])
 
-                dist_fig = visualisation.visualize(real_samples_tensor.numpy(),
-                                                   generated_samples_tensor.numpy())
+                dist_fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
+                                                   generated_data=generated_samples_tensor.numpy(),
+                                                   perplexity=perplexity)
 
                 LOGGING_STEP += 1
                 wandb.log({

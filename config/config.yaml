@@ -8,6 +8,7 @@ system:
   padding_value: 0.0
   run_name: 'TimeGAN (baseline)'
   jointly_num_epochs: 100
+  perplexity: 10
 
 d:
   dim_hidden: 24
