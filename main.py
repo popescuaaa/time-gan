@@ -332,7 +332,7 @@ if __name__ == '__main__':
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     config['system']['perplexity'] = args.perplexity
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
-    wandb.init(config=config, project='_timegan_baseline_', name=run_name)
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + '--perplexity: {}'.format(config['system']['perplexity'])
+    wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
 
     time_gan_trainer(cfg=config)
