@@ -22,7 +22,6 @@ import wandb
 from metrics import visualisation
 import argparse
 
-
 '''
     
     Trainers
@@ -168,7 +167,7 @@ def joint_trainer(emb: Embedding,
             # Generator Training
             for _ in range(2):
                 # Random sequence
-                z = torch.randn_like(x)
+                z = torch.rand_like(x)
 
                 # Forward Pass (Generator)
                 emb.zero_grad()
@@ -199,7 +198,7 @@ def joint_trainer(emb: Embedding,
                 rec_opt.step()
 
             # Random sequence
-            z = torch.randn_like(x)
+            z = torch.rand_like(x)
 
             # Discriminator Training
             emb.zero_grad()
@@ -229,10 +228,12 @@ def joint_trainer(emb: Embedding,
 
                 # Generate a balanced distribution
                 generated_samples = []
-                for _ in range(len(real_samples)):
-                    _z = torch.randn_like(x)
-                    sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=t)
-                    generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
+                idx = 0
+                with torch.no_grad():
+                    for _ in range(len(real_samples)):
+                        _z = torch.rand_like(x)
+                        sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=t)
+                        generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
 
                 generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
                 generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
@@ -323,16 +324,17 @@ def time_gan_trainer(cfg: Dict) -> None:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--perplexity', type=int, required=True)
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--perplexity', type=int, required=True)
+    # args = parser.parse_args()
 
     torch.random.manual_seed(42)
     with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    config['system']['perplexity'] = args.perplexity
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + '--perplexity: {}'.format(config['system']['perplexity'])
+    config['system']['perplexity'] = 40
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + '--perplexity: {}'.format(
+        config['system']['perplexity'])
     wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
 
     time_gan_trainer(cfg=config)
