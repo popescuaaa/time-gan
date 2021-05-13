@@ -2,7 +2,7 @@ system:
   dataset: 'energy'
   seq_len: 24
   lr: 1e-4
-  batch_size: 128
+  batch_size: 64
   model_name: 'trans-time-gan'
   device: 'cuda:0'
   run_name: 'TimeGAN (research)'

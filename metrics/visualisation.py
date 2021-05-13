@@ -12,48 +12,49 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
     t_sne = TSNE(n_components=2, verbose=1, perplexity=perplexity, n_iter=300)
     t_sne_results = t_sne.fit_transform(processed_data)
 
-    # size = len(real_data)
-    # generated_x = t_sne_results[size:, 0]
-    # generated_y = t_sne_results[size:, 1]
-    #
-    # real_x = t_sne_results[:size, 0]
-    # real_y = t_sne_results[:size, 1]
-    #
-    # fig = go.Figure()
-    #
-    # fig.add_trace(go.Scatter(x=generated_x, y=generated_y,
-    #                          mode='markers',
-    #                          name='Synthetic distribution',
-    #                          marker_color='red'))
-    #
-    # fig.add_trace(go.Scatter(x=real_x, y=real_y,
-    #                          mode='markers',
-    #                          name='Real distribution',
-    #                          marker_color='blue'))
-    #
-    # fig.update_layout(
-    #     autosize=False,
-    #     width=230,
-    #     height=230,
-    #     margin=dict(
-    #         l=50,
-    #         r=50,
-    #         b=100,
-    #         t=100,
-    #         pad=4
-    #     ),
-    #     paper_bgcolor="LightSteelBlue")
-    f, ax = plt.subplots(1)
+    size = len(real_data)
+    generated_x = t_sne_results[size:, 0]
+    generated_y = t_sne_results[size:, 1]
 
-    plt.scatter(t_sne_results[:anal_sample_no, 0], t_sne_results[:anal_sample_no, 1],
-                c=colors[:anal_sample_no], alpha=0.2, label="Original")
-    plt.scatter(t_sne_results[anal_sample_no:, 0], t_sne_results[anal_sample_no:, 1],
-                c=colors[anal_sample_no:], alpha=0.2, label="Synthetic")
+    real_x = t_sne_results[:size, 0]
+    real_y = t_sne_results[:size, 1]
 
-    ax.legend()
+    fig = go.Figure()
 
-    plt.title('t-SNE plot')
-    plt.xlabel('x-tsne')
-    plt.ylabel('y_tsne')
+    fig.add_trace(go.Scatter(x=generated_x, y=generated_y,
+                             mode='markers',
+                             name='Synthetic distribution',
+                             marker_color='red'))
 
-    return f
+    fig.add_trace(go.Scatter(x=real_x, y=real_y,
+                             mode='markers',
+                             name='Real distribution',
+                             marker_color='blue'))
+
+    fig.update_layout(
+        autosize=False,
+        width=230,
+        height=230,
+        margin=dict(
+            l=50,
+            r=50,
+            b=100,
+            t=100,
+            pad=4
+        ),
+        paper_bgcolor="LightSteelBlue")
+
+    # f, ax = plt.subplots(1)
+    #
+    # plt.scatter(t_sne_results[:anal_sample_no, 0], t_sne_results[:anal_sample_no, 1],
+    #             c=colors[:anal_sample_no], alpha=0.2, label="Original")
+    # plt.scatter(t_sne_results[anal_sample_no:, 0], t_sne_results[anal_sample_no:, 1],
+    #             c=colors[anal_sample_no:], alpha=0.2, label="Synthetic")
+    #
+    # ax.legend()
+    #
+    # plt.title('t-SNE plot')
+    # plt.xlabel('x-tsne')
+    # plt.ylabel('y_tsne')
+
+    return fig
