@@ -19,8 +19,7 @@ from torch.utils.data import DataLoader
 from data import Energy
 import yaml
 import wandb
-from metrics import visualisation
-from torch import Tensor
+from metrics import evaluate
 
 import argparse
 
@@ -300,168 +299,6 @@ def time_gan_trainer(cfg: Dict) -> None:
     torch.save(d.state_dict(), './trained_models/d.pt')
 
 
-def plot_all_samples(real_samples: np.ndarray,
-                     sup: Supervisor,
-                     rec: Recovery,
-                     g: Generator,
-                     time: Tensor,
-                     data_shape: torch.Size,
-                     perplexity: int):
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
-    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                                                   real_samples_tensor.shape[1] * \
-                                                   real_samples_tensor.shape[2])
-    # Generate a balanced distribution
-    generated_samples = []
-    with torch.no_grad():
-        for _ in range(len(real_samples)):
-            _z = torch.rand(data_shape)
-            sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=time)
-            generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
-
-    generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-    generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                             generated_samples_tensor.shape[1] * \
-                                                             generated_samples_tensor.shape[2])
-
-    dist_fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
-                                       generated_data=generated_samples_tensor.numpy(),
-                                       perplexity=perplexity)
-
-    return dist_fig
-
-
-def plot_sup_samples(emb: Embedding,
-                     sup: Supervisor,
-                     device: torch.device,
-                     real_samples: np.ndarray,
-                     batch_size: int,
-                     perplexity: int):
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
-    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                                                   real_samples_tensor.shape[1] * \
-                                                   real_samples_tensor.shape[2])
-
-    generated_samples = []
-    with torch.no_grad():
-        for e in real_samples:
-            e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
-            e_tensor = e_tensor.to(device)
-            e_tensor = e_tensor.float()
-            _t, _ = Energy.extract_time(e_tensor)
-            _, _, _h_sup = _supervisor_forward(emb=emb, sup=sup, x=e_tensor, t=_t)
-            generated_samples.append(_h_sup.detach().cpu().numpy()[0, :, :])
-
-    generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-    generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                             generated_samples_tensor.shape[1] * \
-                                                             generated_samples_tensor.shape[2])
-
-    fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
-                                  generated_data=generated_samples_tensor.numpy(),
-                                  perplexity=perplexity)
-
-    return fig
-
-
-def plot_emb_samples(real_samples: np.ndarray,
-                     batch_size: int,
-                     device: torch.device,
-                     emb: Embedding,
-                     rec: Recovery,
-                     perplexity: int):
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
-    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                                                   real_samples_tensor.shape[1] * \
-                                                   real_samples_tensor.shape[2])
-
-    generated_samples = []
-    with torch.no_grad():
-        for e in real_samples:
-            e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
-            e_tensor = e_tensor.to(device)
-            e_tensor = e_tensor.float()
-            _t, _ = Energy.extract_time(e_tensor)
-            _, sample = _embedding_forward_side(emb=emb, rec=rec, x=e_tensor, t=_t)
-            generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
-
-    generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-    generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                             generated_samples_tensor.shape[1] * \
-                                                             generated_samples_tensor.shape[2])
-
-    fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
-                                  generated_data=generated_samples_tensor.numpy(),
-                                  perplexity=perplexity)
-
-    return fig
-
-
-def evaluate(cfg: Dict) -> None:
-    global LOGGING_STEP
-    seq_len = int(cfg['system']['seq_len'])
-    batch_size = int(cfg['system']['batch_size'])
-    device = torch.device(cfg['system']['device'])
-
-    ds = Energy.Energy(seq_len)
-
-    # Load TimeGAN elements
-    emb = Embedding(cfg=cfg)
-    emb.load_state_dict(torch.load('./trained_models/emb.pt'))
-    emb.eval()
-
-    rec = Recovery(cfg=cfg)
-    rec.load_state_dict(torch.load('./trained_models/rec.pt'))
-    rec.eval()
-
-    sup = Supervisor(cfg=cfg)
-    sup.load_state_dict(torch.load('./trained_models/sup.pt'))
-    sup.eval()
-
-    g = Generator(cfg=cfg)
-    g.load_state_dict(torch.load('./trained_models/g.pt'))
-    g.eval()
-
-    d = Discriminator(cfg=cfg)
-    d.load_state_dict(torch.load('./trained_models/d.pt'))
-    d.eval()
-
-    real_samples = ds.get_distribution()
-    time = torch.from_numpy(np.array([seq_len] * batch_size))
-    data_shape = torch.Size((batch_size, seq_len, emb.dim_features))
-
-    print('[EVAL] Plotting emb samples')
-    emb_samples = plot_emb_samples(real_samples=real_samples,
-                                   emb=emb,
-                                   rec=rec,
-                                   device=device,
-                                   batch_size=batch_size,
-                                   perplexity=40)
-
-    print('[EVAL] Plotting sup samples')
-    sup_samples = plot_sup_samples(emb,
-                                   sup,
-                                   device,
-                                   real_samples,
-                                   batch_size,
-                                   perplexity=40)
-
-    print('[EVAL] Plotting all samples')
-    all_samples = plot_all_samples(real_samples=real_samples,
-                                   g=g, sup=sup,
-                                   rec=rec,
-                                   time=time,
-                                   data_shape=data_shape,
-                                   perplexity=40)
-
-    LOGGING_STEP += 1
-    wandb.log({
-        'All samples': all_samples,
-        'Emb samples': emb_samples,
-        'Sup samples': sup_samples
-    }, step=LOGGING_STEP)
-
-
 if __name__ == '__main__':
     # parser = argparse.ArgumentParser()
     # parser.add_argument('--perplexity', type=int, required=True)
@@ -474,7 +311,10 @@ if __name__ == '__main__':
     config['system']['perplexity'] = 40
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + '--perplexity: {}'.format(
         config['system']['perplexity'])
-    wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
 
-    time_gan_trainer(cfg=config)
-    evaluate(cfg=config)
+    if config['system']['step'] == 'train':
+        wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
+        time_gan_trainer(cfg=config)
+    else:
+        wandb.init(config=config, project='_timegan_visualisation_[just plot]', name=run_name)
+        evaluate.evaluate(cfg=config, LOGGING_STEP=LOGGING_STEP)

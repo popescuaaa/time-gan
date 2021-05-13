@@ -9,6 +9,7 @@ system:
   run_name: 'TimeGAN (baseline)'
   jointly_num_epochs: 100
   perplexity: 10
+  step: 'train'
 
 d:
   dim_hidden: 24
