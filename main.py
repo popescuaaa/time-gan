@@ -284,8 +284,8 @@ def time_gan_trainer(cfg: Dict) -> None:
     emb_opt_main = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
     sup_opt = Adam(sup.parameters(), lr=lr)
-    g_opt = Adam(g.parameters(), lr=lr)
-    d_opt = Adam(d.parameters(), lr=lr)
+    g_opt = Adam(g.parameters(), lr=2 * lr)
+    d_opt = Adam(d.parameters(), lr=lr / 2)
 
     print(f"[EMB] Start Embedding network training")
     embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
