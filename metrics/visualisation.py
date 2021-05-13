@@ -55,6 +55,5 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
     plt.title('t-SNE plot')
     plt.xlabel('x-tsne')
     plt.ylabel('y_tsne')
-    plt.show()
 
     return f
