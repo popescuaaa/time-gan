@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from TEmbedding import TEmbedding
 from TRecovery import TRecoveryEncoder
 from TDiscriminator import TDiscriminatorEncoder
-from TSupervisor import TSupervisor
+from TSupervisor import TSupervisorEncoder
 from TGenerator import TGenerator
 
 
@@ -22,12 +22,12 @@ def _embedding_forward_side(emb: TEmbedding,
 
 def _embedding_forward_main(emb: TEmbedding,
                             rec: TRecoveryEncoder,
-                            sup: TSupervisor,
+                            sup: TSupervisorEncoder,
                             src: Tensor) -> Tuple[Any, Any, Tensor]:
     assert src.device == emb.device, 'Src and EMB are not on the same device'
     h = emb(src)
     _src = rec(h)
-    _h_sup = sup(h, h)
+    _h_sup = sup(h)  # temporal dynamics
 
     g_loss_sup = F.mse_loss(
         _h_sup[:, :-1, :],
@@ -42,13 +42,13 @@ def _embedding_forward_main(emb: TEmbedding,
 
 
 def _supervisor_forward(emb: TEmbedding,
-                        sup: TSupervisor,
+                        sup: TSupervisorEncoder,
                         src: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     assert src.device == emb.device, 'Src and EMB are not on the same device'
 
     # Supervisor forward pass
     h = emb(src)
-    _h_sup = sup(h, h)
+    _h_sup = sup(h)
 
     # Supervised loss
 
@@ -62,7 +62,7 @@ def _supervisor_forward(emb: TEmbedding,
 
 
 def _discriminator_forward(emb: TEmbedding,
-                           sup: TSupervisor,
+                           sup: TSupervisorEncoder,
                            g: TGenerator,
                            d: TDiscriminatorEncoder,
                            src: Tensor,
@@ -73,7 +73,7 @@ def _discriminator_forward(emb: TEmbedding,
 
     # Discriminator forward pass and adversarial loss
     h = emb(src).detach()
-    _h = sup(h, h).detach()
+    _h = sup(h).detach()
     _e = g(z).detach()
 
     # Forward Pass
@@ -91,7 +91,7 @@ def _discriminator_forward(emb: TEmbedding,
 
 
 def _generator_forward(emb: TEmbedding,
-                       sup: TSupervisor,
+                       sup: TSupervisorEncoder,
                        g: TGenerator,
                        d: TDiscriminatorEncoder,
                        rec: TRecoveryEncoder,
@@ -103,12 +103,12 @@ def _generator_forward(emb: TEmbedding,
 
     # Supervised Forward Pass
     h = emb(src)
-    _h_sup = sup(h, h)
+    _h_sup = sup(h)
     _x = rec(h)
 
     # Generator Forward Pass
     _e = g(z)
-    _h = sup(_e, _e)
+    _h = sup(_e)
 
     # Synthetic generated data
     _src = rec(_h)  # recovered data
@@ -138,7 +138,7 @@ def _generator_forward(emb: TEmbedding,
     return g_loss
 
 
-def _inference(sup: TSupervisor,
+def _inference(sup: TSupervisorEncoder,
                g: TGenerator,
                rec: TRecoveryEncoder,
                seq_len: int,
@@ -163,11 +163,11 @@ def _inference(sup: TSupervisor,
   
     """
     # initial_sup_input = torch.zeros(size=(batch_size, 1, g.dim_output))  # 0s
-    tgt = torch.zeros_like(_e)
+    # tgt = torch.zeros_like(_e)
     # tgt[0, 0, :] = initial_sup_input
-    for i in range(seq_len - 1):
-        _h = sup(tgt, _e)
-        tgt[0, i + 1, :] = _h[0, i, :]
+    # for i in range(seq_len - 1):
+    _h = sup(_e)
+    # tgt[0, i + 1, :] = _h[0, i, :]
 
     # Synthetic generated data (reconstructed)
     _x = rec(_h)
