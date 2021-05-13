@@ -1,11 +1,11 @@
 from torch.optim import Optimizer, Adam
 import torch
 
-from TSupervisor import TSupervisor
+from TSupervisor import TSupervisorEncoder
 from TEmbedding import TEmbedding
 from TGenerator import TGenerator
-from TDiscriminator import TDiscriminatorEncoder, TDiscriminatorDecoder
-from TRecovery import TRecoveryEncoder, TRecoveryDecoder
+from TDiscriminator import TDiscriminatorEncoder
+from TRecovery import TRecoveryEncoder
 
 from TTimeGAN import _embedding_forward_main, \
     _embedding_forward_side, \
@@ -34,7 +34,7 @@ LOGGING_STEP = 0
 
 
 def embedding_trainer(emb: TEmbedding,
-                      sup: TSupervisor,
+                      sup: TSupervisorEncoder,
                       rec: TRecoveryEncoder,
                       emb_opt: Optimizer,
                       rec_opt: Optimizer,
@@ -68,21 +68,21 @@ def embedding_trainer(emb: TEmbedding,
             emb_opt.step()
             rec_opt.step()
 
-            # if idx == len(dl) - 1:
-            #     LOGGING_STEP += 1
-            #     wandb.log({
-            #         "embedding training epoch": epoch,
-            #         "e0 loss": e_loss0,
-            #         "Data reconstruction": plot_two_time_series(x.detach().cpu().numpy()[0, :, 0],
-            #                                                     "Real data",
-            #                                                     _x.detach().cpu().numpy()[0, :, 0],
-            #                                                     "Reconstructed data")
-            #     }, step=LOGGING_STEP)
+            if idx == len(dl) - 1:
+                LOGGING_STEP += 1
+                wandb.log({
+                    "embedding training epoch": epoch,
+                    "e0 loss": e_loss0,
+                    "Data reconstruction": plot_two_time_series(x.detach().cpu().numpy()[0, :, 12],
+                                                                "Real data",
+                                                                _x.detach().cpu().numpy()[0, :, 12],
+                                                                "Reconstructed data")
+                }, step=LOGGING_STEP)
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
 def supervisor_trainer(emb: TEmbedding,
-                       sup: TSupervisor,
+                       sup: TSupervisorEncoder,
                        sup_opt: Optimizer,
                        dl: DataLoader,
                        cfg: Dict) -> None:
@@ -112,24 +112,24 @@ def supervisor_trainer(emb: TEmbedding,
             # Update model parameters
             sup_opt.step()
 
-            # if idx == len(dl) - 1:
-            #     LOGGING_STEP += 1
-            #     wandb.log({
-            #         "supervisor training epoch": epoch,
-            #         "supervisor loss": sup_loss,
-            #         "Temporal dynamics [ teacher forcing ] on latent representation":
-            #             plot_two_time_series(
-            #                 h.detach().cpu().numpy()[0, :, 0],
-            #                 "Latent representation",
-            #                 _h_sup.detach().cpu().numpy()[0, :, 0],
-            #                 "Supervisor step"),
-            #
-            #     }, step=LOGGING_STEP)
+            if idx == len(dl) - 1:
+                LOGGING_STEP += 1
+                wandb.log({
+                    "supervisor training epoch": epoch,
+                    "supervisor loss": sup_loss,
+                    "Temporal dynamics [ teacher forcing ] on latent representation":
+                        plot_two_time_series(
+                            h.detach().cpu().numpy()[0, :, 12],
+                            "Latent representation",
+                            _h_sup.detach().cpu().numpy()[0, :, 12],
+                            "Supervisor step"),
+
+                }, step=LOGGING_STEP)
         print(f"[SUP] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
 def joint_trainer(emb: TEmbedding,
-                  sup: TSupervisor,
+                  sup: TSupervisorEncoder,
                   g: TGenerator,
                   d: TDiscriminatorEncoder,
                   rec: TRecoveryEncoder,
@@ -147,11 +147,6 @@ def joint_trainer(emb: TEmbedding,
     d_threshold = float(cfg['t_d']['threshold'])
     device = torch.device(cfg['system']['device'])
     perplexity = int(cfg['system']['perplexity'])
-
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
-    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                                                   real_samples_tensor.shape[1] * \
-                                                   real_samples_tensor.shape[2])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -219,37 +214,20 @@ def joint_trainer(emb: TEmbedding,
             if idx == len(dl) - 1:
                 # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, seq_len=seq_len)
-                fake_sample = plot_time_series(sample.detach().cpu().numpy()[0, :, 0],
+                fake_sample = plot_time_series(sample.detach().cpu().numpy()[0, :, 12],
                                                'Generated sample {}'.format(epoch))
-                real_sample = plot_time_series(x.detach().cpu().numpy()[0, :, 0],
+                real_sample = plot_time_series(x.detach().cpu().numpy()[0, :, 12],
                                                'Real sample {}'.format(epoch))
 
-                # Generate a balanced distribution
-                generated_samples = []
-                for _ in range(len(real_samples)):
-                    _z = torch.randn_like(x)
-                    sample = _inference(sup=sup, g=g, rec=rec, z=_z, seq_len=seq_len)
-                    generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
-
-                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-                generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                                         generated_samples_tensor.shape[1] * \
-                                                                         generated_samples_tensor.shape[2])
-
-                dist_fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
-                                                   generated_data=generated_samples_tensor.numpy(),
-                                                   perplexity=perplexity)
-
-                # LOGGING_STEP += 1
-                # wandb.log({
-                #     "epoch": epoch,
-                #     "d loss": d_loss,
-                #     "g loss": g_loss,
-                #     "e loss": e_loss,
-                #     "Fake sample": fake_sample,
-                #     "Real sample": real_sample,
-                #     "Distribution": dist_fig
-                # }, step=LOGGING_STEP)
+                LOGGING_STEP += 1
+                wandb.log({
+                    "epoch": epoch,
+                    "d loss": d_loss,
+                    "g loss": g_loss,
+                    "e loss": e_loss,
+                    "Fake sample": fake_sample,
+                    "Real sample": real_sample,
+                }, step=LOGGING_STEP)
 
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
@@ -270,7 +248,7 @@ def time_gan_trainer(cfg: Dict) -> None:
     # TimeGAN elements
     emb = TEmbedding(cfg=cfg).to(device)
     rec = TRecoveryEncoder(cfg=cfg).to(device)
-    sup = TSupervisor(cfg=cfg).to(device)
+    sup = TSupervisorEncoder(cfg=cfg).to(device)
     g = TGenerator(cfg=cfg).to(device)
     d = TDiscriminatorEncoder(cfg=cfg).to(device)
 
@@ -329,8 +307,7 @@ if __name__ == '__main__':
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     # config['system']['perplexity'] = args.perplexity
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + '--perplexity: {}'.format(
-        config['system']['perplexity'])
-    # wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
+    wandb.init(config=config, project='_transformer_gan_', name=run_name)
 
     time_gan_trainer(cfg=config)
