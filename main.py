@@ -20,6 +20,8 @@ from data import Energy
 import yaml
 import wandb
 from metrics import visualisation
+from torch import Tensor
+
 import argparse
 
 '''
@@ -72,10 +74,10 @@ def embedding_trainer(emb: Embedding,
                 wandb.log({
                     "embedding training epoch": epoch,
                     "e0 loss": e_loss0,
-                    "Data reconstruction": plot_two_time_series(x.detach().cpu().numpy()[0, :, 0],
-                                                                "Real data",
-                                                                _x.detach().cpu().numpy()[0, :, 0],
-                                                                "Reconstructed data")
+                    "Data reconstruction example": plot_two_time_series(x.detach().cpu().numpy()[0, :, 0],
+                                                                        "Real data",
+                                                                        _x.detach().cpu().numpy()[0, :, 0],
+                                                                        "Reconstructed data")
                 }, step=LOGGING_STEP)
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
@@ -139,21 +141,11 @@ def joint_trainer(emb: Embedding,
                   rec_opt: Optimizer,
                   emb_opt: Optimizer,
                   dl: DataLoader,
-                  cfg: Dict,
-                  real_samples: np.ndarray) -> None:
+                  cfg: Dict) -> None:
     global LOGGING_STEP
     num_epochs = int(cfg['system']['jointly_num_epochs'])
-    batch_size = int(cfg['system']['batch_size'])
-    seq_len = int(cfg['system']['seq_len'])
-    dim_latent = int(cfg['g']['dim_latent'])
     d_threshold = float(cfg['d']['threshold'])
     device = torch.device(cfg['system']['device'])
-    perplexity = int(cfg['system']['perplexity'])
-
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
-    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                                                   real_samples_tensor.shape[1] * \
-                                                   real_samples_tensor.shape[2])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -226,24 +218,6 @@ def joint_trainer(emb: Embedding,
                 real_sample = plot_time_series(x.detach().cpu().numpy()[0, :, 0],
                                                'Real sample {}'.format(epoch))
 
-                # Generate a balanced distribution
-                generated_samples = []
-                idx = 0
-                with torch.no_grad():
-                    for _ in range(len(real_samples)):
-                        _z = torch.rand_like(x)
-                        sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=t)
-                        generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
-
-                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-                generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                                         generated_samples_tensor.shape[1] * \
-                                                                         generated_samples_tensor.shape[2])
-
-                dist_fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
-                                                   generated_data=generated_samples_tensor.numpy(),
-                                                   perplexity=perplexity)
-
                 LOGGING_STEP += 1
                 wandb.log({
                     "epoch": epoch,
@@ -251,8 +225,7 @@ def joint_trainer(emb: Embedding,
                     "g loss": g_loss,
                     "e loss": e_loss,
                     "Fake sample": fake_sample,
-                    "Real sample": real_sample,
-                    "Distribution": dist_fig
+                    "Real sample": real_sample
                 }, step=LOGGING_STEP)
 
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
@@ -279,7 +252,6 @@ def time_gan_trainer(cfg: Dict) -> None:
     d = Discriminator(cfg=cfg).to(device)
 
     # Optimizers
-    # TODO: see the behaviour and update lr with TTsUR if necessary
     emb_opt_side = Adam(emb.parameters(), lr=lr)
     emb_opt_main = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
@@ -288,7 +260,13 @@ def time_gan_trainer(cfg: Dict) -> None:
     d_opt = Adam(d.parameters(), lr=lr / 2)
 
     print(f"[EMB] Start Embedding network training")
-    embedding_trainer(emb=emb, rec=rec, sup=sup, emb_opt=emb_opt_side, rec_opt=rec_opt, dl=dl, cfg=cfg)
+    embedding_trainer(emb=emb,
+                      rec=rec,
+                      sup=sup,
+                      emb_opt=emb_opt_side,
+                      rec_opt=rec_opt,
+                      dl=dl,
+                      cfg=cfg)
 
     print(f"[SUP] Start Supervisor network training")
     supervisor_trainer(emb=emb, sup=sup, sup_opt=sup_opt, dl=dl, cfg=cfg)
@@ -305,8 +283,7 @@ def time_gan_trainer(cfg: Dict) -> None:
                   g_opt=g_opt,
                   d_opt=d_opt,
                   dl=dl,
-                  cfg=cfg,
-                  real_samples=ds.get_distribution())
+                  cfg=cfg)
 
     # Move models to cpu
     emb = emb.to('cpu')
@@ -321,6 +298,54 @@ def time_gan_trainer(cfg: Dict) -> None:
     torch.save(sup.state_dict(), './trained_models/sup.pt')
     torch.save(g.state_dict(), './trained_models/g.pt')
     torch.save(d.state_dict(), './trained_models/d.pt')
+
+
+def plot_all_samples(real_samples: np.ndarray,
+                     sup: Supervisor,
+                     rec: Recovery,
+                     g: Generator,
+                     time: Tensor,
+                     data_shape: torch.Size,
+                     perplexity: int) -> None:
+    real_samples_tensor = torch.from_numpy(np.array(real_samples))
+    real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
+                                                   real_samples_tensor.shape[1] * \
+                                                   real_samples_tensor.shape[2])
+    # Generate a balanced distribution
+    generated_samples = []
+    with torch.no_grad():
+        for _ in range(len(real_samples)):
+            _z = torch.rand(data_shape)
+            sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=time)
+            generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
+
+    generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
+    generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                                                             generated_samples_tensor.shape[1] * \
+                                                             generated_samples_tensor.shape[2])
+
+    dist_fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
+                                       generated_data=generated_samples_tensor.numpy(),
+                                       perplexity=perplexity)
+
+
+def plot_sup_samples():
+    pass
+
+
+def plot_emb_samples(real_samples: np.ndarray,
+                     batch_size: int,
+                     device: torch.device,
+                     emb: Embedding, rec: Recovery) -> None:
+    generated_samples = []
+    with torch.no_grad():
+        for e in real_samples:
+            e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+            e_tensor = e_tensor.to(device)
+            e_tensor = e_tensor.float()
+            _t, _ = Energy.extract_time(e_tensor)
+            _, sample = _embedding_forward_side(emb=emb, rec=rec, x=e_tensor, t=_t)
+            generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
 
 
 if __name__ == '__main__':
