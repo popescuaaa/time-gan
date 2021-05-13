@@ -4,7 +4,7 @@ system:
   lr: 1e-4
   batch_size: 64
   model_name: 'trans-time-gan'
-  device: 'cuda:0'
+  device: 'cuda:1'
   run_name: 'TimeGAN (research)'
   jointly_num_epochs: 100
   perplexity: 10
