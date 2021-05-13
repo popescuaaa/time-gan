@@ -164,12 +164,12 @@ def _inference(sup: TSupervisor,
       @link: https://discuss.pytorch.org/t/how-to-use-nn-transformerdecoder-at-inference-time/49484/5
   
     """
-    initial_sup_input = torch.zeros(size=(batch_size, 1, g.dim_output))  # 0s
-    tgt = torch.zeros(size=(1, seq_len, g.dim_output))
-    tgt[0, 0, :] = initial_sup_input
-    for i in range(seq_len):
+    # initial_sup_input = torch.zeros(size=(batch_size, 1, g.dim_output))  # 0s
+    tgt = torch.zeros_like(_e)
+    # tgt[0, 0, :] = initial_sup_input
+    for i in range(seq_len - 1):
         _h = sup(tgt, _e)
-        tgt[0, i + 1, :] = _h[0, i, :]
+        tgt[0, i + 1, :] = _h[0, i, :g.dim_output]
 
     # Synthetic generated data (reconstructed)
     _x = rec(_h)
