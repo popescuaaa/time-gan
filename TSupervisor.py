@@ -21,7 +21,7 @@ class TSupervisor(nn.Module):
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
                                                      dim_feedforward=self.feature_size * 4)
-        self.decoder = TransformerDecoder(decoder_layer=self.encoder_layer, num_layers=self.num_layers)
+        self.decoder = TransformerDecoder(decoder_layer=self.decoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
         # Init weights

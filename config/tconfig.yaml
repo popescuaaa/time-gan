@@ -1,0 +1,48 @@
+system:
+  dataset: 'energy'
+  seq_len: 24
+  lr: 1e-4
+  batch_size: 128
+  model_name: 'trans-time-gan'
+  device: 'cuda:0'
+  run_name: 'TimeGAN (research)'
+  jointly_num_epochs: 100
+  perplexity: 10
+
+t_d:
+  threshold: 0.5
+  feature_size: 14
+  num_layers: 10
+  dropout: 0.1
+  n_head: 7
+  dim_output: 1
+
+t_g:
+  feature_size: 28
+  num_layers: 10
+  dropout: 0.1
+  n_head: 7
+  dim_output: 14
+
+t_emb:
+  num_epochs: 1
+  feature_size: 28
+  num_layers: 10
+  dropout: 0.1
+  n_head: 7
+  dim_output: 14
+
+t_sup:
+  num_epochs: 1
+  feature_size: 14
+  num_layers: 10
+  dropout: 0.1
+  n_head: 7
+  dim_output: 14
+
+t_rec:
+  feature_size: 14
+  num_layers: 10
+  dropout: 0.1
+  n_head: 7
+  dim_output: 28

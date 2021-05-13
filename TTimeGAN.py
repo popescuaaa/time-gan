@@ -14,7 +14,7 @@ def _embedding_forward_side(emb: TEmbedding,
                             src: Tensor) -> Tuple[Tensor, Tensor]:
     assert src.device == emb.device, 'Src and EMB are not on the same device'
     h = emb(src)
-    _src = rec(src)
+    _src = rec(h)
     e_loss_t0 = F.mse_loss(_src, src)
     e_loss0 = 10 * torch.sqrt(e_loss_t0)
     return e_loss0, _src
@@ -26,8 +26,8 @@ def _embedding_forward_main(emb: TEmbedding,
                             src: Tensor) -> Tuple[Any, Any, Tensor]:
     assert src.device == emb.device, 'Src and EMB are not on the same device'
     h = emb(src)
-    _src = rec(src)
-    _h_sup = sup(src, h)
+    _src = rec(h)
+    _h_sup = sup(h, h)
 
     g_loss_sup = F.mse_loss(
         _h_sup[:, :-1, :],
@@ -48,7 +48,7 @@ def _supervisor_forward(emb: TEmbedding,
 
     # Supervisor forward pass
     h = emb(src)
-    _h_sup = sup(src, h)
+    _h_sup = sup(h, h)
 
     # Supervised loss
 
@@ -73,7 +73,7 @@ def _discriminator_forward(emb: TEmbedding,
 
     # Discriminator forward pass and adversarial loss
     h = emb(src).detach()
-    _h = sup(src, h).detach()
+    _h = sup(h, h).detach()
     _e = g(z).detach()
 
     # Forward Pass
@@ -103,12 +103,12 @@ def _generator_forward(emb: TEmbedding,
 
     # Supervised Forward Pass
     h = emb(src)
-    _h_sup = sup(src, h)
+    _h_sup = sup(h, h)
     _x = rec(h)
 
     # Generator Forward Pass
     _e = g(z)
-    _h = sup(src, _e)
+    _h = sup(_e, _e)
 
     # Synthetic generated data
     _src = rec(_h)  # recovered data
@@ -141,8 +141,6 @@ def _generator_forward(emb: TEmbedding,
 def _inference(sup: TSupervisor,
                g: TGenerator,
                rec: TRecoveryEncoder,
-               src: Tensor,
-               batch_size: int,
                seq_len: int,
                z: Tensor) -> Tensor:
     # Generate synthetic data
@@ -169,7 +167,7 @@ def _inference(sup: TSupervisor,
     # tgt[0, 0, :] = initial_sup_input
     for i in range(seq_len - 1):
         _h = sup(tgt, _e)
-        tgt[0, i + 1, :] = _h[0, i, :g.dim_output]
+        tgt[0, i + 1, :] = _h[0, i, :]
 
     # Synthetic generated data (reconstructed)
     _x = rec(_h)
