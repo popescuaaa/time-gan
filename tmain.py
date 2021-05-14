@@ -21,8 +21,7 @@ from torch.utils.data import DataLoader
 from data import Energy
 import yaml
 import wandb
-from metrics import visualisation
-import argparse
+from metrics import tevaluate
 
 '''
 
@@ -139,8 +138,7 @@ def joint_trainer(emb: TEmbedding,
                   rec_opt: Optimizer,
                   emb_opt: Optimizer,
                   dl: DataLoader,
-                  cfg: Dict,
-                  real_samples: np.ndarray) -> None:
+                  cfg: Dict) -> None:
     global LOGGING_STEP
     num_epochs = int(cfg['system']['jointly_num_epochs'])
     seq_len = int(cfg['system']['seq_len'])
@@ -279,8 +277,7 @@ def time_gan_trainer(cfg: Dict) -> None:
                   g_opt=g_opt,
                   d_opt=d_opt,
                   dl=dl,
-                  cfg=cfg,
-                  real_samples=ds.get_distribution())
+                  cfg=cfg)
 
     # Move models to cpu
     emb = emb.to('cpu')
@@ -307,7 +304,16 @@ if __name__ == '__main__':
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     # config['system']['perplexity'] = args.perplexity
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
-    wandb.init(config=config, project='_transformer_gan_', name=run_name)
+
+    if config['system']['step'] == 'train':
+        run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
+        wandb.init(config=config, project='_transformer_gan_', name=run_name)
+        time_gan_trainer(cfg=config)
+    elif config['system']['step'] == 'eval':
+        run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
+        wandb.init(config=config, project='_transtimegan_visualisation_', name=run_name)
+        tevaluate.evaluate(cfg=config, LOGGING_STEP=LOGGING_STEP)
+    else:
+        raise ValueError('Step is not defined')
 
     time_gan_trainer(cfg=config)

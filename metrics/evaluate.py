@@ -20,14 +20,14 @@ def plot_all_samples(real_samples: np.ndarray,
                      device: torch.device,
                      data_shape: torch.Size,
                      perplexity: int):
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
+    real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
     real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
                                                    real_samples_tensor.shape[1] * \
                                                    real_samples_tensor.shape[2])
     # Generate a balanced distribution
     generated_samples = []
     with torch.no_grad():
-        for _ in range(len(real_samples)):
+        for _ in range(len(real_samples[:1000])):
             _z = torch.rand(data_shape).to(device)
             sample = _inference(sup=sup, g=g, rec=rec, z=_z, t=time)
             generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
@@ -54,7 +54,7 @@ def plot_sup_samples(emb: Embedding,
     target_samples = []
 
     with torch.no_grad():
-        for e in real_samples:
+        for e in real_samples[:1000]:
             e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
             e_tensor = e_tensor.to(device)
             e_tensor = e_tensor.float()
@@ -86,14 +86,14 @@ def plot_emb_samples(real_samples: np.ndarray,
                      emb: Embedding,
                      rec: Recovery,
                      perplexity: int):
-    real_samples_tensor = torch.from_numpy(np.array(real_samples))
+    real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
     real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
                                                    real_samples_tensor.shape[1] * \
                                                    real_samples_tensor.shape[2])
 
     generated_samples = []
     with torch.no_grad():
-        for e in real_samples:
+        for e in real_samples[:1000]:
             e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
             e_tensor = e_tensor.to(device)
             e_tensor = e_tensor.float()

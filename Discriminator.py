@@ -23,7 +23,8 @@ class Discriminator(nn.Module):
         self.d_rnn = nn.GRU(input_size=self.dim_hidden,
                             hidden_size=self.dim_hidden,
                             num_layers=self.num_layers,
-                            batch_first=True)
+                            batch_first=True,
+                            dropout=0.5)
         self.d_linear = nn.Linear(self.dim_hidden, 1)
 
         with torch.no_grad():

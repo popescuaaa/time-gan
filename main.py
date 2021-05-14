@@ -296,7 +296,7 @@ def time_gan_trainer(cfg: Dict) -> None:
     torch.save(rec.state_dict(), './trained_models/rec.pt')
     torch.save(sup.state_dict(), './trained_models/sup.pt')
     torch.save(g.state_dict(), './trained_models/g.pt')
-    torch.save(d.state_dict(), './trained_models/d.pt')
+    torch.save(d.state_dict(), './trained_models/ddd.pt')
 
 
 if __name__ == '__main__':
@@ -315,6 +315,8 @@ if __name__ == '__main__':
     if config['system']['step'] == 'train':
         wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
         time_gan_trainer(cfg=config)
-    else:
+    elif config['system']['step'] == 'eval':
         wandb.init(config=config, project='_timegan_visualisation_[just plot]', name=run_name)
         evaluate.evaluate(cfg=config, LOGGING_STEP=LOGGING_STEP)
+    else:
+        raise ValueError('Step is not defined')

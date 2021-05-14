@@ -6,9 +6,8 @@ import matplotlib.pylab as plt
 
 def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int):
     # Do t-SNE Analysis together
-    anal_sample_no = len(real_data)
+    anal_sample_no = 1000
     processed_data = np.concatenate((real_data, generated_data), axis=0)
-    colors = ["red" for i in range(anal_sample_no)] + ["blue" for i in range(anal_sample_no)]
     t_sne = TSNE(n_components=2, verbose=1, perplexity=perplexity, n_iter=300)
     t_sne_results = t_sne.fit_transform(processed_data)
 
@@ -24,12 +23,18 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
     fig.add_trace(go.Scatter(x=generated_x, y=generated_y,
                              mode='markers',
                              name='Synthetic distribution',
-                             marker_color='red'))
+                             marker={
+                                 'size': 10,
+                                 'color': 'red'
+                             }))
 
     fig.add_trace(go.Scatter(x=real_x, y=real_y,
                              mode='markers',
                              name='Real distribution',
-                             marker_color='blue'))
+                             marker={
+                                 'size': 10,
+                                 'color': 'blue'
+                             }))
 
     fig.update_layout(
         autosize=False,
