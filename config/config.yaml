@@ -1,15 +1,15 @@
 system:
   dataset: 'energy'
   seq_len: 24
-  lr: 1e-4
-  batch_size: 128
+  lr: 1e-3
+  batch_size: 256
   model_name: 'timegan'
-  device: 'cuda:0'
+  device: 'cuda:1'
   padding_value: 0.0
   run_name: 'TimeGAN (baseline)'
-  jointly_num_epochs: 1000
+  jointly_num_epochs: 5
   perplexity: 10
-  step: 'eval'
+  step: 'embedding'
 
 d:
   dim_hidden: 24
@@ -22,17 +22,17 @@ g:
 
 emb:
   dim_features: 28
-  dim_hidden: 24
-  num_layers: 3
+  dim_hidden: 256
+  num_layers: 1
   num_epochs: 100
 
 sup:
   dim_features: 1
   dim_hidden: 24
   num_layers: 3
-  num_epochs: 100
+  num_epochs: 5
 
 rec:
   dim_output: 28
-  dim_hidden: 24
-  num_layers: 3
+  dim_hidden: 256
+  num_layers: 1
