@@ -5,8 +5,6 @@ import matplotlib.pylab as plt
 
 
 def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int):
-    # Do t-SNE Analysis together
-    anal_sample_no = 1000
     processed_data = np.concatenate((real_data, generated_data), axis=0)
     t_sne = TSNE(n_components=2, verbose=1, perplexity=perplexity, n_iter=300)
     t_sne_results = t_sne.fit_transform(processed_data)
@@ -22,6 +20,7 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
 
     fig.add_trace(go.Scatter(x=generated_x, y=generated_y,
                              mode='markers',
+                             opacity=0.3,
                              name='Synthetic distribution',
                              marker={
                                  'size': 10,
@@ -30,6 +29,7 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
 
     fig.add_trace(go.Scatter(x=real_x, y=real_y,
                              mode='markers',
+                             opacity=0.3,
                              name='Real distribution',
                              marker={
                                  'size': 10,
@@ -48,18 +48,4 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
             pad=4
         ),
         paper_bgcolor="LightSteelBlue")
-
-    # f, ax = plt.subplots(1)
-    #
-    # plt.scatter(t_sne_results[:anal_sample_no, 0], t_sne_results[:anal_sample_no, 1],
-    #             c=colors[:anal_sample_no], alpha=0.2, label="Original")
-    # plt.scatter(t_sne_results[anal_sample_no:, 0], t_sne_results[anal_sample_no:, 1],
-    #             c=colors[anal_sample_no:], alpha=0.2, label="Synthetic")
-    #
-    # ax.legend()
-    #
-    # plt.title('t-SNE plot')
-    # plt.xlabel('x-tsne')
-    # plt.ylabel('y_tsne')
-
     return fig
