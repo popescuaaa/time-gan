@@ -1,7 +1,6 @@
 import plotly.graph_objects as go
 from sklearn.manifold import TSNE
 import numpy as np
-import matplotlib.pylab as plt
 
 
 def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int):
