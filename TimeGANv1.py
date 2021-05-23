@@ -11,7 +11,6 @@ import wandb
 from metrics import visualisation
 from torch.optim import Optimizer, Adam
 import numpy as np
-from utils import plot_two_time_series, plot_time_series
 
 
 class Embedding(nn.Module):
@@ -46,22 +45,6 @@ class Embedding(nn.Module):
             nn.Linear(self.dim_hidden, self.dim_hidden)
         )
 
-        with torch.no_grad():
-            for name, param in self.emb_rnn.named_parameters():
-                if 'weight_ih' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'bias_ih' in name:
-                    param.data.fill_(1)
-                elif 'bias_hh' in name:
-                    param.data.fill_(0)
-            for name, param in self.emb_linear.named_parameters():
-                if 'weight' in name:
-                    torch.nn.init.xavier_uniform_(param)
-                elif 'bias' in name:
-                    param.data.fill_(0)
-
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
             :param x: time series batch * sequence_len * features
@@ -81,9 +64,9 @@ class Embedding(nn.Module):
                                                   total_length=self.seq_len)
 
         h_0 = self.norm(h_0)
-        logits = self.emb_linear(h_0)
+        embedded_x = self.emb_linear(h_0)
 
-        return logits
+        return embedded_x
 
     @property
     def device(self):
@@ -141,17 +124,6 @@ class Recovery(nn.Module):
         )
 
         self.norm = nn.LayerNorm(self.dim_hidden)
-
-        with torch.no_grad():
-            for name, param in self.rec_rnn.named_parameters():
-                if 'weight_ih' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'bias_ih' in name:
-                    param.data.fill_(1)
-                elif 'bias_hh' in name:
-                    param.data.fill_(0)
 
     def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -231,17 +203,7 @@ class Supervisor(nn.Module):
         )
 
         self.norm = nn.LayerNorm(self.dim_hidden)
-
-        with torch.no_grad():
-            for name, param in self.sup_rnn.named_parameters():
-                if 'weight_ih' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'bias_ih' in name:
-                    param.data.fill_(1)
-                elif 'bias_hh' in name:
-                    param.data.fill_(0)
+        self.sup_linear = nn.Linear(self.dim_hidden, self.dim_hidden)
 
     def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -249,6 +211,7 @@ class Supervisor(nn.Module):
             :param t: temporal information batch * 1
             :return: (_H) predicted next step data (latent form) batch * sequence_len * H
         """
+        h = self.mlp(h)
         h_packed = nn.utils.rnn.pack_padded_sequence(input=h,
                                                      lengths=t,
                                                      batch_first=True,
@@ -260,8 +223,7 @@ class Supervisor(nn.Module):
                                                   total_length=self.seq_len)
 
         h_0 = self.norm(h_0)
-        supervised_h = self.mlp(h_0)
-
+        supervised_h = self.sup_linear(h_0)
         return supervised_h
 
     @property
@@ -272,7 +234,6 @@ class Supervisor(nn.Module):
 def run_supervisor_test() -> None:
     cfg = {
         "sup": {
-            "dim_features": 5,  # feature dimension (unused - middleware network -)
             "dim_hidden": 100,  # latent space dimension (H)
             "num_layers": 50  # number of layers in GRU
         },
@@ -313,23 +274,14 @@ class Generator(nn.Module):
                             batch_first=True)
 
         self.g_linear = nn.Linear(self.dim_hidden, self.dim_hidden)
-        self.g_sigmoid = nn.Sigmoid()
+        self.mlp = nn.Sequential(
+            nn.Linear(self.dim_latent, self.dim_hidden),
+            nn.LayerNorm(self.dim_hidden),
+            nn.ReLU(),
+            nn.Linear(self.dim_hidden, self.dim_hidden)
+        )
 
-        with torch.no_grad():
-            for name, param in self.g_rnn.named_parameters():
-                if 'weight_ih' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'bias_ih' in name:
-                    param.data.fill_(1)
-                elif 'bias_hh' in name:
-                    param.data.fill_(0)
-            for name, param in self.g_linear.named_parameters():
-                if 'weight' in name:
-                    torch.nn.init.xavier_uniform_(param)
-                elif 'bias' in name:
-                    param.data.fill_(0)
+        self.norm = nn.LayerNorm(self.dim_hidden)
 
     def forward(self, z: torch.Tensor, t: torch.Tensor):
         """
@@ -337,6 +289,7 @@ class Generator(nn.Module):
             :param t: temporal information batch * 1
             :return: (H) latent space embeddings batch * sequence_len * H
         """
+        z = self.mlp(z)
         x_packed = nn.utils.rnn.pack_padded_sequence(input=z,
                                                      lengths=t,
                                                      batch_first=True,
@@ -347,8 +300,8 @@ class Generator(nn.Module):
                                                   padding_value=self.padding_value,
                                                   total_length=self.seq_len)
 
-        logits = self.g_linear(h_0)
-        h = self.g_sigmoid(logits)
+        h_0 = self.norm(h_0)
+        h = self.g_linear(h_0)
         return h
 
     @property
@@ -396,25 +349,17 @@ class Discriminator(nn.Module):
         self.d_rnn = nn.GRU(input_size=self.dim_hidden,
                             hidden_size=self.dim_hidden,
                             num_layers=self.num_layers,
-                            batch_first=True,
-                            dropout=0.5)
-        self.d_linear = nn.Linear(self.dim_hidden, 1)
+                            dropout=0.4,
+                            batch_first=True)
 
-        with torch.no_grad():
-            for name, param in self.d_rnn.named_parameters():
-                if 'weight_ih' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'bias_ih' in name:
-                    param.data.fill_(1)
-                elif 'bias_hh' in name:
-                    param.data.fill_(0)
-            for name, param in self.d_linear.named_parameters():
-                if 'weight' in name:
-                    torch.nn.init.xavier_uniform_(param)
-                elif 'bias' in name:
-                    param.data.fill_(0)
+        # self.d_linear = nn.Linear(self.dim_hidden, 1)
+        self.norm = nn.LayerNorm(self.dim_hidden)
+        self.mlp = nn.Sequential(
+            nn.Linear(self.dim_hidden, self.dim_hidden),
+            nn.LayerNorm(self.dim_hidden),
+            nn.ReLU(),
+            nn.Linear(self.dim_hidden, 1)
+        )
 
     def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -433,8 +378,9 @@ class Discriminator(nn.Module):
                                                   padding_value=self.padding_value,
                                                   total_length=self.seq_len)
 
-        logits = self.d_linear(h_0).squeeze(-1)
-        return logits
+        h_0 = self.norm(h_0)
+        h_0 = self.mlp(h_0)
+        return h_0
 
     @property
     def device(self):
@@ -611,7 +557,7 @@ def _inference(sup: Supervisor,
                z: Tensor,
                t: Tensor) -> Tensor:
     # Generate synthetic data
-    assert z.device == g.device, 'z and Time GAN are not on the same device'
+    assert z.device == g.device, 'Z and Generator are not on the same device'
 
     # Generator Forward Pass
     _e = g(z, t)
@@ -686,7 +632,8 @@ def embedding_trainer(emb: Embedding,
 
                 fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
                                               generated_data=generated_samples_tensor.numpy(),
-                                              perplexity=40)
+                                              perplexity=40,
+                                              legend=['Embedded sequence', 'Recovered sequence'])
 
                 wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
                                                                              ys=[y1, y2],
@@ -764,7 +711,8 @@ def supervisor_trainer(emb: Embedding,
 
                 fig = visualisation.visualize(real_data=embedding_samples_tensor.numpy(),
                                               generated_data=supervised_samples_tensor.numpy(),
-                                              perplexity=40)
+                                              perplexity=40,
+                                              legend=['Embedded data', 'Supervised data'])
 
                 wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
                                                                              ys=[y1, y2],
@@ -774,7 +722,9 @@ def supervisor_trainer(emb: Embedding,
                           step=epoch * len(dl) + idx)
 
                 wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
-                wandb.log({'Supervisor loss': sup_loss}, step=epoch * len(dl) + idx)
+                wandb.log({'Supervisor loss': loss}, step=epoch * len(dl) + idx)
+
+        print('Current epoch: {}'.format(epoch))
 
 
 def joint_trainer(emb: Embedding,
@@ -788,10 +738,12 @@ def joint_trainer(emb: Embedding,
                   rec_opt: Optimizer,
                   emb_opt: Optimizer,
                   dl: DataLoader,
+                  real_samples: np.ndarray,
                   cfg: Dict) -> None:
     num_epochs = int(cfg['system']['jointly_num_epochs'])
     d_threshold = float(cfg['d']['threshold'])
     device = torch.device(cfg['system']['device'])
+    batch_size = int(cfg['system']['batch_size'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -859,29 +811,62 @@ def joint_trainer(emb: Embedding,
             if idx % 10 == 0:
                 # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
-                fake_sample = plot_time_series(sample.detach().cpu().numpy()[0, :, 0],
-                                               'Generated sample {}'.format(epoch))
-                real_sample = plot_time_series(x.detach().cpu().numpy()[0, :, 0],
-                                               'Real sample {}'.format(epoch))
+                fake_sample = sample.detach().cpu().numpy()[0, :, 0]
+                real_sample = x.detach().cpu().numpy()[0, :, 0]
 
-                wandb.log({
-                    "d loss": d_loss,
-                    "g loss": g_loss,
-                    "e loss": e_loss,
-                    "Fake sample": fake_sample,
-                    "Real sample": real_sample
-                }, step=epoch * len(dl) + idx)
+                y1 = fake_sample.tolist()
+                y2 = real_sample.tolist()
+                x = list(range(len(y1)))
 
-        print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
+                generated_samples = []
+                comp_real_samples = []
+
+                with torch.no_grad():
+                    for e in real_samples[:1000]:
+                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+                        e_tensor = e_tensor.to(device)
+                        e_tensor = e_tensor.float()
+                        _t, _ = Energy.extract_time(e_tensor)
+                        z = torch.rand_like(e_tensor)
+                        gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
+                        comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
+                        generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
+
+                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
+                generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                                                                         generated_samples_tensor.shape[1] * \
+                                                                         generated_samples_tensor.shape[2])
+
+                comp_real_samples_tensor = torch.from_numpy(np.array(comp_real_samples))
+                comp_real_samples_tensor = comp_real_samples_tensor.view(comp_real_samples_tensor.shape[0],
+                                                                         comp_real_samples_tensor.shape[1] * \
+                                                                         comp_real_samples_tensor.shape[2])
+
+                fig = visualisation.visualize(real_data=comp_real_samples_tensor.numpy(),
+                                              generated_data=generated_samples_tensor.numpy(),
+                                              perplexity=40,
+                                              legend=['Generated data', 'Real data'])
+
+                wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
+                                                                             ys=[y1, y2],
+                                                                             keys=['Generated', 'Real'],
+                                                                             xname='time',
+                                                                             title="Generated data plot")},
+                          step=epoch * len(dl) + idx)
+
+                wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
+                wandb.log({'G loss': g_loss}, step=epoch * len(dl) + idx)
+                wandb.log({'D loss': d_loss}, step=epoch * len(dl) + idx)
+                wandb.log({'E loss': e_loss}, step=epoch * len(dl) + idx)
+
+    print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
 
-def time_gan_trainer(cfg: Dict) -> None:
+def time_gan_trainer(cfg: Dict, step: str) -> None:
     # Init all parameters and models
     seq_len = int(cfg['system']['seq_len'])
     batch_size = int(cfg['system']['batch_size'])
     device = torch.device(cfg['system']['device'])
-
-    step = cfg['system']['step']
 
     lr = float(cfg['system']['lr'])
     # ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
@@ -902,8 +887,8 @@ def time_gan_trainer(cfg: Dict) -> None:
     emb_opt_main = Adam(emb.parameters(), lr=lr)
     rec_opt = Adam(rec.parameters(), lr=lr)
     sup_opt = Adam(sup.parameters(), lr=lr)
-    g_opt = Adam(g.parameters(), lr=2 * lr)
-    d_opt = Adam(d.parameters(), lr=lr / 2)
+    g_opt = Adam(g.parameters(), lr=lr)
+    d_opt = Adam(d.parameters(), lr=lr)
 
     if step == "embedding":
         print(f"[EMB] Start Embedding network training")
@@ -921,15 +906,12 @@ def time_gan_trainer(cfg: Dict) -> None:
         torch.save(emb.state_dict(), './trained_models/emb.pt')
         torch.save(rec.state_dict(), './trained_models/rec.pt')
     elif step == "supervisor":
-        # Load embedding network
         emb = Embedding(cfg=cfg)
         emb.load_state_dict(torch.load('./trained_models/emb.pt'))
-        emb.eval()
         emb = emb.to(device)
 
         rec = Recovery(cfg=cfg)
         rec.load_state_dict(torch.load('./trained_models/rec.pt'))
-        rec.eval()
         rec = rec.to(device)
 
         print(f"[SUP] Start Supervisor network training")
@@ -941,33 +923,44 @@ def time_gan_trainer(cfg: Dict) -> None:
                            cfg=cfg,
                            real_samples=ds.get_distribution())
 
-    # print(f"[JOINT] Start joint training")
-    # joint_trainer(emb=emb,
-    #               rec=rec,
-    #               sup=sup,
-    #               g=g,
-    #               d=d,
-    #               emb_opt=emb_opt_main,
-    #               rec_opt=rec_opt,
-    #               sup_opt=sup_opt,
-    #               g_opt=g_opt,
-    #               d_opt=d_opt,
-    #               dl=dl,
-    #               cfg=cfg)
+        sup = sup.to('cpu')
+        torch.save(sup.state_dict(), './trained_models/sup.pt')
+    elif step == 'joint':
+        print(f"[JOINT] Start joint training")
+        emb = Embedding(cfg=cfg)
+        emb.load_state_dict(torch.load('./trained_models/emb.pt'))
+        emb = emb.to(device)
 
-    # # Move models to cpu
-    # emb = emb.to('cpu')
-    # rec = rec.to('cpu')
-    # sup = sup.to('cpu')
-    # g = g.to('cpu')
-    # d = d.to('cpu')
-    #
-    # # Save models
-    # torch.save(emb.state_dict(), './trained_models/emb.pt')
-    # torch.save(rec.state_dict(), './trained_models/rec.pt')
-    # torch.save(sup.state_dict(), './trained_models/sup.pt')
-    # torch.save(g.state_dict(), './trained_models/g.pt')
-    # torch.save(d.state_dict(), './trained_models/d.pt')
+        rec = Recovery(cfg=cfg)
+        rec.load_state_dict(torch.load('./trained_models/rec.pt'))
+        rec = rec.to(device)
+
+        sup = Supervisor(cfg=cfg)
+        sup.load_state_dict(torch.load('./trained_models/sup.pt'))
+        sup = sup.to(device)
+
+        joint_trainer(emb=emb,
+                      rec=rec,
+                      sup=sup,
+                      g=g,
+                      d=d,
+                      emb_opt=emb_opt_main,
+                      rec_opt=rec_opt,
+                      sup_opt=sup_opt,
+                      g_opt=g_opt,
+                      d_opt=d_opt,
+                      dl=dl,
+                      cfg=cfg,
+                      real_samples=ds.get_distribution())
+
+        g = g.to('cpu')
+        torch.save(g.state_dict(), './trained_models/g.pt')
+
+        d = d.to('cpu')
+        torch.save(d.state_dict(), './trained_models/d.pt')
+
+    else:
+        raise ValueError('The step should be: embedding, supervisor or joint')
 
 
 if __name__ == '__main__':
@@ -979,9 +972,9 @@ if __name__ == '__main__':
     with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    config['system']['perplexity'] = 40
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + '--perplexity: {}'.format(
-        config['system']['perplexity'])
-
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
     wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
-    time_gan_trainer(cfg=config)
+
+    for step in ['embedding', 'supervisor', 'joint']:
+        time_gan_trainer(cfg=config, step=step)
+        break
