@@ -3,7 +3,10 @@ from sklearn.manifold import TSNE
 import numpy as np
 
 
-def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int):
+def visualize(generated_data: np.ndarray,
+              real_data: np.ndarray,
+              perplexity: int,
+              legend: [str]):
     processed_data = np.concatenate((real_data, generated_data), axis=0)
     t_sne = TSNE(n_components=2, verbose=1, perplexity=perplexity, n_iter=300)
     t_sne_results = t_sne.fit_transform(processed_data)
@@ -20,7 +23,7 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
     fig.add_trace(go.Scatter(x=generated_x, y=generated_y,
                              mode='markers',
                              opacity=0.3,
-                             name='Synthetic distribution',
+                             name=legend[0],
                              marker={
                                  'size': 10,
                                  'color': 'red'
@@ -29,7 +32,7 @@ def visualize(generated_data: np.ndarray, real_data: np.ndarray, perplexity: int
     fig.add_trace(go.Scatter(x=real_x, y=real_y,
                              mode='markers',
                              opacity=0.3,
-                             name='Real distribution',
+                             name=legend[1],
                              marker={
                                  'size': 10,
                                  'color': 'blue'
