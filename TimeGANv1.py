@@ -5,12 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict
 from torch.utils.data import DataLoader
-from data import Energy
+from data import Energy, SineWave
 import yaml
 import wandb
 from metrics import visualisation
 from torch.optim import Optimizer, Adam
 import numpy as np
+import os
 
 
 class Embedding(nn.Module):
@@ -203,7 +204,7 @@ class Supervisor(nn.Module):
         )
 
         self.norm = nn.LayerNorm(self.dim_hidden)
-        self.sup_linear = nn.Linear(self.dim_hidden, self.dim_hidden)
+        # self.sup_linear = nn.Linear(self.dim_hidden, self.dim_hidden)
 
     def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -211,7 +212,7 @@ class Supervisor(nn.Module):
             :param t: temporal information batch * 1
             :return: (_H) predicted next step data (latent form) batch * sequence_len * H
         """
-        h = self.mlp(h)
+        # h = self.mlp(h)
         h_packed = nn.utils.rnn.pack_padded_sequence(input=h,
                                                      lengths=t,
                                                      batch_first=True,
@@ -223,7 +224,7 @@ class Supervisor(nn.Module):
                                                   total_length=self.seq_len)
 
         h_0 = self.norm(h_0)
-        supervised_h = self.sup_linear(h_0)
+        supervised_h = self.mlp(h_0)
         return supervised_h
 
     @property
@@ -268,17 +269,18 @@ class Generator(nn.Module):
         self.padding_value = int(cfg['system']['padding_value'])
 
         # Architecture
-        self.g_rnn = nn.GRU(input_size=self.dim_latent,
+        self.g_rnn = nn.GRU(input_size=self.dim_hidden,
                             hidden_size=self.dim_hidden,
                             num_layers=self.num_layers,
                             batch_first=True)
 
         self.g_linear = nn.Linear(self.dim_hidden, self.dim_hidden)
+
         self.mlp = nn.Sequential(
-            nn.Linear(self.dim_latent, self.dim_hidden),
-            nn.LayerNorm(self.dim_hidden),
+            nn.Linear(self.dim_latent, self.dim_hidden * 2),
+            nn.LayerNorm(self.dim_hidden * 2),
             nn.ReLU(),
-            nn.Linear(self.dim_hidden, self.dim_hidden)
+            nn.Linear(self.dim_hidden * 2, self.dim_hidden)
         )
 
         self.norm = nn.LayerNorm(self.dim_hidden)
@@ -349,15 +351,14 @@ class Discriminator(nn.Module):
         self.d_rnn = nn.GRU(input_size=self.dim_hidden,
                             hidden_size=self.dim_hidden,
                             num_layers=self.num_layers,
-                            dropout=0.4,
                             batch_first=True)
 
         # self.d_linear = nn.Linear(self.dim_hidden, 1)
         self.norm = nn.LayerNorm(self.dim_hidden)
         self.mlp = nn.Sequential(
-            nn.Linear(self.dim_hidden, self.dim_hidden),
-            nn.LayerNorm(self.dim_hidden),
-            nn.ReLU(),
+            # nn.Linear(self.dim_hidden, self.dim_hidden),
+            # nn.LayerNorm(self.dim_hidden),
+            # nn.ReLU(),
             nn.Linear(self.dim_hidden, 1)
         )
 
@@ -539,14 +540,15 @@ def _generator_forward(emb: Embedding,
     g_loss_s = torch.nn.functional.mse_loss(_h_sup[:, :-1, :], h[:, 1:, :])  # Teacher forcing next output
 
     # 3. Two Moments
-    g_loss_v1 = torch.mean(torch.abs(
-        torch.sqrt(_x.var(dim=0, unbiased=False) + 1e-6) - torch.sqrt(x.var(dim=0, unbiased=False) + 1e-6)))
+    g_loss_v1 = torch.mean(torch.abs((_x.std(dim=0, unbiased=False) + 1e-6) -
+                                     x.std(dim=0, unbiased=False) + 1e-6))
+
     g_loss_v2 = torch.mean(torch.abs((_x.mean(dim=0)) - (x.mean(dim=0))))
 
     g_loss_v = g_loss_v1 + g_loss_v2
 
     # 4. Sum
-    g_loss = g_loss_u + gamma * g_loss_u_e + 100 * torch.sqrt(g_loss_s) + 100 * g_loss_v
+    g_loss = g_loss_u + gamma * g_loss_u_e + 100 * torch.sqrt(g_loss_s) + 1000 * g_loss_v
 
     return g_loss
 
@@ -611,9 +613,9 @@ def embedding_trainer(emb: Embedding,
                 x = list(range(len(y1)))
 
                 real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
-                real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                                                               real_samples_tensor.shape[1] * \
-                                                               real_samples_tensor.shape[2])
+                # real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
+                #                                                real_samples_tensor.shape[1] * \
+                #                                                real_samples_tensor.shape[2])
 
                 generated_samples = []
                 with torch.no_grad():
@@ -626,9 +628,9 @@ def embedding_trainer(emb: Embedding,
                         generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
 
                 generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-                generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                                         generated_samples_tensor.shape[1] * \
-                                                                         generated_samples_tensor.shape[2])
+                # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                #                                                          generated_samples_tensor.shape[1] * \
+                #                                                          generated_samples_tensor.shape[2])
 
                 fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
                                               generated_data=generated_samples_tensor.numpy(),
@@ -700,14 +702,14 @@ def supervisor_trainer(emb: Embedding,
                         embedding_samples.append(h.detach().cpu().numpy()[0, :, :])
 
                 embedding_samples_tensor = torch.from_numpy(np.array(embedding_samples))
-                embedding_samples_tensor = embedding_samples_tensor.view(embedding_samples_tensor.shape[0],
-                                                                         embedding_samples_tensor.shape[1] * \
-                                                                         embedding_samples_tensor.shape[2])
+                # embedding_samples_tensor = embedding_samples_tensor.view(embedding_samples_tensor.shape[0],
+                #                                                          embedding_samples_tensor.shape[1] * \
+                #                                                          embedding_samples_tensor.shape[2])
 
                 supervised_samples_tensor = torch.from_numpy(np.array(supervised_samples))
-                supervised_samples_tensor = supervised_samples_tensor.view(supervised_samples_tensor.shape[0],
-                                                                           supervised_samples_tensor.shape[1] * \
-                                                                           supervised_samples_tensor.shape[2])
+                # supervised_samples_tensor = supervised_samples_tensor.view(supervised_samples_tensor.shape[0],
+                #                                                            supervised_samples_tensor.shape[1] * \
+                #                                                            supervised_samples_tensor.shape[2])
 
                 fig = visualisation.visualize(real_data=embedding_samples_tensor.numpy(),
                                               generated_data=supervised_samples_tensor.numpy(),
@@ -755,7 +757,7 @@ def joint_trainer(emb: Embedding,
             x = x.to(device)
 
             # Generator Training
-            for _ in range(2):
+            for _ in range(10):
                 # Random sequence
                 z = torch.rand_like(x)
 
@@ -806,6 +808,7 @@ def joint_trainer(emb: Embedding,
 
                 # Update model parameters
                 d_opt.step()
+
             d_loss = d_loss.item()
 
             if idx % 10 == 0:
@@ -822,36 +825,41 @@ def joint_trainer(emb: Embedding,
                 comp_real_samples = []
 
                 with torch.no_grad():
-                    for e in real_samples[:1000]:
-                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
-                        e_tensor = e_tensor.to(device)
-                        e_tensor = e_tensor.float()
-                        _t, _ = Energy.extract_time(e_tensor)
-                        z = torch.rand_like(e_tensor)
-                        gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
-                        comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
-                        generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
+                    rs_tensor = torch.from_numpy(np.array(real_samples[:1000])).to(device).float()
+                    _t, _ = Energy.extract_time(rs_tensor)
+                    z = torch.rand_like(rs_tensor)
+                    gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
 
-                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-                generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                                                                         generated_samples_tensor.shape[1] * \
-                                                                         generated_samples_tensor.shape[2])
+                    # for e in real_samples[:1000]:
+                    #     e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+                    #     e_tensor = e_tensor.to(device)
+                    #     e_tensor = e_tensor.float()
+                    #     _t, _ = Energy.extract_time(e_tensor)
+                    #     z = torch.rand_like(e_tensor)
+                    #     gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
+                    #     comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
+                    #     generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
 
-                comp_real_samples_tensor = torch.from_numpy(np.array(comp_real_samples))
-                comp_real_samples_tensor = comp_real_samples_tensor.view(comp_real_samples_tensor.shape[0],
-                                                                         comp_real_samples_tensor.shape[1] * \
-                                                                         comp_real_samples_tensor.shape[2])
+                # generated_samples_tensor = torch.from_numpy(np.array(gs))
+                # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                #                                                          generated_samples_tensor.shape[1] * \
+                #                                                          generated_samples_tensor.shape[2])
+
+                comp_real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
+                # comp_real_samples_tensor = comp_real_samples_tensor.view(comp_real_samples_tensor.shape[0],
+                #                                                          comp_real_samples_tensor.shape[1] * \
+                #                                                          comp_real_samples_tensor.shape[2])
 
                 fig = visualisation.visualize(real_data=comp_real_samples_tensor.numpy(),
-                                              generated_data=generated_samples_tensor.numpy(),
+                                              generated_data=gs.detach().cpu().numpy(),
                                               perplexity=40,
                                               legend=['Generated data', 'Real data'])
 
-                wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
-                                                                             ys=[y1, y2],
-                                                                             keys=['Generated', 'Real'],
-                                                                             xname='time',
-                                                                             title="Generated data plot")},
+                wandb.log({"Generated data plot": wandb.plot.line_series(xs=x,
+                                                                         ys=[y1, y2],
+                                                                         keys=['Generated', 'Real'],
+                                                                         xname='time',
+                                                                         title="Generated data plot")},
                           step=epoch * len(dl) + idx)
 
                 wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
@@ -868,11 +876,11 @@ def time_gan_trainer(cfg: Dict, step: str) -> None:
     batch_size = int(cfg['system']['batch_size'])
     device = torch.device(cfg['system']['device'])
 
-    lr = float(cfg['system']['lr'])
-    # ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
-    # ds = ds_generator.get_dataset()
+    print('Current device', device)
 
-    ds = Energy.Energy(seq_len)
+    lr = float(cfg['system']['lr'])
+
+    ds = SineWave.SineWave(samples_number=24 * 1000, seq_len=24, features_dim=28)
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
 
     # TimeGAN elements
@@ -903,16 +911,18 @@ def time_gan_trainer(cfg: Dict, step: str) -> None:
 
         emb = emb.to('cpu')
         rec = rec.to('cpu')
-        torch.save(emb.state_dict(), './trained_models/emb.pt')
-        torch.save(rec.state_dict(), './trained_models/rec.pt')
+        torch.save(emb.state_dict(), './trained_models/emb_{}.pt'.format(config['system']['dataset']))
+        torch.save(rec.state_dict(), './trained_models/rec_{}.pt'.format(config['system']['dataset']))
     elif step == "supervisor":
         emb = Embedding(cfg=cfg)
-        emb.load_state_dict(torch.load('./trained_models/emb.pt'))
+        emb.load_state_dict(torch.load('./trained_models/emb_{}.pt'.format(config['system']['dataset'])))
         emb = emb.to(device)
+        emb.train()
 
         rec = Recovery(cfg=cfg)
-        rec.load_state_dict(torch.load('./trained_models/rec.pt'))
+        rec.load_state_dict(torch.load('./trained_models/rec_{}.pt'.format(config['system']['dataset'])))
         rec = rec.to(device)
+        rec.train()
 
         print(f"[SUP] Start Supervisor network training")
         supervisor_trainer(emb=emb,
@@ -924,19 +934,19 @@ def time_gan_trainer(cfg: Dict, step: str) -> None:
                            real_samples=ds.get_distribution())
 
         sup = sup.to('cpu')
-        torch.save(sup.state_dict(), './trained_models/sup.pt')
+        torch.save(sup.state_dict(), './trained_models/sup_{}.pt'.format(config['system']['dataset']))
     elif step == 'joint':
         print(f"[JOINT] Start joint training")
         emb = Embedding(cfg=cfg)
-        emb.load_state_dict(torch.load('./trained_models/emb.pt'))
+        emb.load_state_dict(torch.load('./trained_models/emb_{}.pt'.format(config['system']['dataset'])))
         emb = emb.to(device)
 
         rec = Recovery(cfg=cfg)
-        rec.load_state_dict(torch.load('./trained_models/rec.pt'))
+        rec.load_state_dict(torch.load('./trained_models/rec_{}.pt'.format(config['system']['dataset'])))
         rec = rec.to(device)
 
         sup = Supervisor(cfg=cfg)
-        sup.load_state_dict(torch.load('./trained_models/sup.pt'))
+        sup.load_state_dict(torch.load('./trained_models/sup_{}.pt'.format(config['system']['dataset'])))
         sup = sup.to(device)
 
         joint_trainer(emb=emb,
@@ -954,10 +964,10 @@ def time_gan_trainer(cfg: Dict, step: str) -> None:
                       real_samples=ds.get_distribution())
 
         g = g.to('cpu')
-        torch.save(g.state_dict(), './trained_models/g.pt')
+        torch.save(g.state_dict(), './trained_models/g_{}.pt'.format(config['system']['dataset']))
 
         d = d.to('cpu')
-        torch.save(d.state_dict(), './trained_models/d.pt')
+        torch.save(d.state_dict(), './trained_models/d_{}.pt'.format(config['system']['dataset']))
 
     else:
         raise ValueError('The step should be: embedding, supervisor or joint')
@@ -972,9 +982,8 @@ if __name__ == '__main__':
     with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
-    wandb.init(config=config, project='_timegan_visualisation_', name=run_name)
+    step = os.environ['STEP']
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + ' ' + step
+    wandb.init(config=config, project='thesis', name=run_name)
 
-    for step in ['embedding', 'supervisor', 'joint']:
-        time_gan_trainer(cfg=config, step=step)
-        break
+    time_gan_trainer(cfg=config, step=step)
