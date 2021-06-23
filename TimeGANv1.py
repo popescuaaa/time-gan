@@ -825,22 +825,22 @@ def joint_trainer(emb: Embedding,
                 comp_real_samples = []
 
                 with torch.no_grad():
-                    rs_tensor = torch.from_numpy(np.array(real_samples[:1000])).to(device).float()
-                    _t, _ = Energy.extract_time(rs_tensor)
-                    z = torch.rand_like(rs_tensor)
-                    gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
+                    # rs_tensor = torch.from_numpy(np.array(real_samples[:1000])).to(device).float()
+                    # _t, _ = Energy.extract_time(rs_tensor)
+                    # z = torch.rand_like(rs_tensor)
+                    # gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
 
-                    # for e in real_samples[:1000]:
-                    #     e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
-                    #     e_tensor = e_tensor.to(device)
-                    #     e_tensor = e_tensor.float()
-                    #     _t, _ = Energy.extract_time(e_tensor)
-                    #     z = torch.rand_like(e_tensor)
-                    #     gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
-                    #     comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
-                    #     generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
+                    for e in real_samples[:1000]:
+                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+                        e_tensor = e_tensor.to(device)
+                        e_tensor = e_tensor.float()
+                        _t, _ = Energy.extract_time(e_tensor)
+                        z = torch.rand_like(e_tensor)
+                        gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
+                        comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
+                        generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
 
-                # generated_samples_tensor = torch.from_numpy(np.array(gs))
+                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
                 # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
                 #                                                          generated_samples_tensor.shape[1] * \
                 #                                                          generated_samples_tensor.shape[2])
@@ -851,7 +851,7 @@ def joint_trainer(emb: Embedding,
                 #                                                          comp_real_samples_tensor.shape[2])
 
                 fig = visualisation.visualize(real_data=comp_real_samples_tensor.numpy(),
-                                              generated_data=gs.detach().cpu().numpy(),
+                                              generated_data=generated_samples_tensor.detach().cpu().numpy(),
                                               perplexity=40,
                                               legend=['Generated data', 'Real data'])
 
@@ -993,10 +993,10 @@ if __name__ == '__main__':
     with open('config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    step = os.environ['STEP']
+    step = 'joint'
 
-    config['system']['dataset'] = os.environ['DATASET']
-    config['system']['device'] = os.environ['DEVICE']
+    config['system']['dataset'] = 'stock'
+    config['system']['device'] = 'cuda:0'
 
     if config['system']['dataset'] == 'stock':
         config['g']['dim_latent'] = 6
