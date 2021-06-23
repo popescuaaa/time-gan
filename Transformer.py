@@ -49,7 +49,7 @@ class Encoder(nn.Module):
         self.encoder_layer = TransformerEncoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=1024)
         self.encoder = TransformerEncoder(encoder_layer=self.encoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
@@ -161,19 +161,20 @@ def _embedding_forward_step(emb: Encoder,
 
 if __name__ == '__main__':
     run_transformer_test()
-    ds = Energy.Energy(seq_len=24)
-    dl = DataLoader(ds, num_workers=2, batch_size=128, shuffle=True)
+    torch.cuda.empty_cache()
+    ds = Energy.Energy(seq_len=128 * 128)
+    dl = DataLoader(ds, num_workers=2, batch_size=1, shuffle=True)
     cfg = {
         'encoder': {
-            'feature_size': 28,
-            'num_layers': 10,
+            'feature_size': 64,
+            'num_layers': 2,
             'dropout': 0.1,
-            'n_head': 7,
+            'n_head': 8,
             'dim_output': 14
         },
         'decoder': {
             'feature_size': 14,
-            'num_layers': 10,
+            'num_layers': 1,
             'dropout': 0.1,
             'n_head': 7,
             'dim_output': 28
@@ -183,7 +184,7 @@ if __name__ == '__main__':
     emb_opt = torch.optim.Adam(emb.parameters(), lr=1e-4)
     rec = Decoder(cfg=cfg)
     rec_opt = torch.optim.Adam(rec.parameters(), lr=1e-4)
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
 
     emb = emb.to(device)
     rec = rec.to(device)
@@ -191,31 +192,33 @@ if __name__ == '__main__':
     # Logging
     # wandb.init(config=cfg, project='_transformer_test_', name='Transformer test [ energy ]')
 
-    for epoch in range(100):
-        for i, e in enumerate(dl):
-            rd = e.float()
-            rd = rd.to(device)
-            emb.zero_grad()
-            rec.zero_grad()
-
-            loss, _src = _embedding_forward_step(emb=emb, rec=rec, src=rd, batch_size=128, seq_len=24)
-
-            loss.backward()
-            rec_opt.step()
-            emb_opt.step()
-
-            rd = rd.detach().cpu().numpy()[0, :, 0]
-            _src = _src.detach().cpu().numpy()[0, :, 0]
-
-            fig = plot_two_time_series(real=rd,
-                                       real_data_description='Real data',
-                                       reconstructed=_src,
-                                       reconstructed_data_description='Reconstructed data')
-            # if i == len(dl) - 1:
-            #     wandb.log({
-            #         'epoch': epoch,
-            #         'loss': loss,
-            #         'Embedding result': fig
-            #     })
-
-        print(f"[T_EMB] Epoch: {epoch}, Loss: {loss:.4f}")
+    x = torch.rand(size=(2, 128 * 128, 64)).to(device)
+    h = emb(x)
+    # for epoch in range(5):
+    #     for i, e in enumerate(dl):
+    #         rd = e.float()
+    #         rd = rd.to(device)
+    #         emb.zero_grad()
+    #         rec.zero_grad()
+    #
+    #         loss, _src = _embedding_forward_step(emb=emb, rec=rec, src=rd, batch_size=128, seq_len=24)
+    #
+    #         loss.backward()
+    #         rec_opt.step()
+    #         emb_opt.step()
+    #
+    #         rd = rd.detach().cpu().numpy()[0, :, 0]
+    #         _src = _src.detach().cpu().numpy()[0, :, 0]
+    #
+    #         fig = plot_two_time_series(real=rd,
+    #                                    real_data_description='Real data',
+    #                                    reconstructed=_src,
+    #                                    reconstructed_data_description='Reconstructed data')
+    #         # if i == len(dl) - 1:
+    #         #     wandb.log({
+    #         #         'epoch': epoch,
+    #         #         'loss': loss,
+    #         #         'Embedding result': fig
+    #         #     })
+    #
+    #     print(f"[T_EMB] Epoch: {epoch}, Loss: {loss:.4f}")

@@ -20,11 +20,9 @@ def extract_time(data: np.ndarray):
 
 
 class Energy(Dataset):
-    PATH = './data/energy.csv'
-
-    def __init__(self, seq_len: int):
+    def __init__(self, seq_len: int, path: str):
         super(Energy, self).__init__()
-        original_data = np.loadtxt(self.PATH, delimiter=",", skiprows=1)
+        original_data = np.loadtxt(path, delimiter=",", skiprows=1)
         original_data = original_data[::-1]
         original_data = MinMaxScaler(original_data)
         self.data = []

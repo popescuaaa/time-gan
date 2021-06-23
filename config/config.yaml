@@ -1,38 +1,38 @@
 system:
-  dataset: 'energy'
+  dataset: 'stock'
   seq_len: 24
   lr: 1e-3
-  batch_size: 256
+  batch_size: 128
   model_name: 'timegan'
-  device: 'cuda:1'
+  device: 'cuda:0'
   padding_value: 0.0
   run_name: 'TimeGAN (baseline)'
-  jointly_num_epochs: 5
+  jointly_num_epochs: 100
   perplexity: 10
   step: 'embedding'
 
 d:
-  dim_hidden: 24
-  num_layers: 3
-  threshold: 0.5
+  dim_hidden: 512
+  num_layers: 1
+  threshold: 0.15
+
 g:
   dim_latent: 28
-  dim_hidden: 24
-  num_layers: 3
+  dim_hidden: 512
+  num_layers: 1
 
 emb:
   dim_features: 28
-  dim_hidden: 256
+  dim_hidden: 512
   num_layers: 1
   num_epochs: 100
 
 sup:
-  dim_features: 1
-  dim_hidden: 24
-  num_layers: 3
-  num_epochs: 5
+  dim_hidden: 512
+  num_layers: 1
+  num_epochs: 100
 
 rec:
   dim_output: 28
-  dim_hidden: 256
+  dim_hidden: 512
   num_layers: 1

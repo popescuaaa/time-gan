@@ -36,5 +36,5 @@ class Stock(Dataset):
     def __getitem__(self, item):
         return self.data[item]
 
-    def get_all_samples(self):
+    def get_distribution(self):
         return self.data

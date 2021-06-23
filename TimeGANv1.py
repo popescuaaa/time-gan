@@ -4,8 +4,8 @@ from typing import Tuple, Any
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict
-from torch.utils.data import DataLoader
-from data import Energy, SineWave
+from torch.utils.data import DataLoader, Dataset
+from data import Energy, SineWave, Stock
 import yaml
 import wandb
 from metrics import visualisation
@@ -870,6 +870,17 @@ def joint_trainer(emb: Embedding,
     print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
 
+def get_dataset(name: str) -> Dataset:
+    if name == 'energy':
+        return Energy.Energy(seq_len=24, path='./data/energy.csv')
+    elif name == 'sine':
+        return SineWave.SineWave(samples_number=24 * 1000, seq_len=24, features_dim=28)
+    elif name == 'stock':
+        return Stock.Stock(seq_len=24, path='./data/stock.csv')
+    else:
+        raise ValueError('The dataset does not exist')
+
+
 def time_gan_trainer(cfg: Dict, step: str) -> None:
     # Init all parameters and models
     seq_len = int(cfg['system']['seq_len'])
@@ -880,7 +891,7 @@ def time_gan_trainer(cfg: Dict, step: str) -> None:
 
     lr = float(cfg['system']['lr'])
 
-    ds = SineWave.SineWave(samples_number=24 * 1000, seq_len=24, features_dim=28)
+    ds = get_dataset(cfg['system']['dataset'])
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
 
     # TimeGAN elements
@@ -983,6 +994,15 @@ if __name__ == '__main__':
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     step = os.environ['STEP']
+
+    config['system']['dataset'] = os.environ['DATASET']
+    config['system']['device'] = os.environ['DEVICE']
+
+    if config['system']['dataset'] == 'stock':
+        config['g']['dim_latent'] = 6
+        config['emb']['dim_features'] = 6
+        config['rec']['dim_output'] = 6
+
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + ' ' + step
     wandb.init(config=config, project='thesis', name=run_name)
 
