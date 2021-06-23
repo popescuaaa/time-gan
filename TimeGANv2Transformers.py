@@ -1,4 +1,5 @@
 import torch
+import os
 import wandb
 import yaml
 from torch.nn import TransformerEncoder, TransformerEncoderLayer, TransformerDecoder, TransformerDecoderLayer
@@ -10,7 +11,8 @@ import math
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import Optimizer, Adam
 import numpy as np
-from data import Energy
+from data import Energy, SineWave, Stock
+from metrics import visualisation
 
 
 class PositionalEncoding(nn.Module):
@@ -37,11 +39,11 @@ def _generate_square_subsequent_mask(sz: int) -> Tensor:
 class Embedding(nn.Module):
     def __init__(self, cfg: Dict):
         super(Embedding, self).__init__()
-        self.feature_size = int(cfg['emb']['feature_size'])
-        self.num_layers = int(cfg['emb']['num_layers'])
-        self.dropout = float(cfg['emb']['dropout'])
-        self.n_head = int(cfg['emb']['n_head'])  # 10
-        self.dim_output = int(cfg['emb']['dim_output'])
+        self.feature_size = int(cfg['t_emb']['feature_size'])
+        self.num_layers = int(cfg['t_emb']['num_layers'])
+        self.dropout = float(cfg['t_emb']['dropout'])
+        self.n_head = int(cfg['t_emb']['n_head'])  # 10
+        self.dim_output = int(cfg['t_emb']['dim_output'])
 
         self.model_type = 'Transformer'
         self.src_mask = None
@@ -51,14 +53,23 @@ class Embedding(nn.Module):
         self.encoder_layer = TransformerEncoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=self.feature_size * 8)
         self.encoder = TransformerEncoder(encoder_layer=self.encoder_layer, num_layers=self.num_layers)
-        self.decoder = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
+        self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
+        #
+        # self.mlp = nn.Sequential(
+        #     nn.Linear(self.feature_size, self.feature_size * 8),
+        #     nn.LayerNorm(self.feature_size * 8),
+        #     nn.ReLU(),
+        #     nn.Linear(self.feature_size * 8, self.feature_size * 8)
+        # )
+
+        # self.norm = nn.LayerNorm(self.feature_size * 8)
 
         # Init weights
         init_range = 0.1
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-init_range, init_range)
+        self.ll.bias.data.zero_()
+        self.ll.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, src: Tensor) -> Tensor:
         if self.src_mask is None or self.src_mask.size(0) != len(src):
@@ -66,9 +77,11 @@ class Embedding(nn.Module):
             mask = _generate_square_subsequent_mask(len(src)).to(device)
             self.src_mask = mask
 
+        # src = self.mlp(src)
         src = self.pos_encoder(src)
         output = self.encoder(src, self.src_mask)
-        output = self.decoder(output)
+        # output = self.norm(output)
+        output = self.ll(output)
         return output
 
     @property
@@ -79,25 +92,25 @@ class Embedding(nn.Module):
 class RecoveryDecoder(nn.Module):
     def __init__(self, cfg: Dict):
         super(RecoveryDecoder, self).__init__()
-        self.feature_size = int(cfg['rec']['feature_size'])
-        self.num_layers = int(cfg['rec']['num_layers'])
-        self.dropout = float(cfg['rec']['dropout'])
-        self.n_head = int(cfg['rec']['n_head'])
-        self.dim_output = int(cfg['rec']['dim_output'])
+        self.feature_size = int(cfg['t_rec']['feature_size'])
+        self.num_layers = int(cfg['t_rec']['num_layers'])
+        self.dropout = float(cfg['t_rec']['dropout'])
+        self.n_head = int(cfg['t_rec']['n_head'])
+        self.dim_output = int(cfg['t_rec']['dim_output'])
 
         # Architecture
         self.pos_encoder = PositionalEncoding(dim_model=self.feature_size)
         self.decoder_layer = TransformerDecoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=self.feature_size * 8)
         self.decoder = TransformerDecoder(decoder_layer=self.decoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
         # Init weights
         init_range = 0.1
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-init_range, init_range)
+        self.ll.bias.data.zero_()
+        self.ll.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, tgt: Tensor, memory: Tensor) -> Tensor:
         tgt = self.pos_encoder(tgt)
@@ -109,11 +122,11 @@ class RecoveryDecoder(nn.Module):
 class RecoveryEncoder(nn.Module):
     def __init__(self, cfg: Dict):
         super(RecoveryEncoder, self).__init__()
-        self.feature_size = int(cfg['rec']['feature_size'])
-        self.num_layers = int(cfg['rec']['num_layers'])
-        self.dropout = float(cfg['rec']['dropout'])
-        self.n_head = int(cfg['rec']['n_head'])
-        self.dim_output = int(cfg['rec']['dim_output'])
+        self.feature_size = int(cfg['t_rec']['feature_size'])
+        self.num_layers = int(cfg['t_rec']['num_layers'])
+        self.dropout = float(cfg['t_rec']['dropout'])
+        self.n_head = int(cfg['t_rec']['n_head'])
+        self.dim_output = int(cfg['t_rec']['dim_output'])
 
         self.model_type = 'Transformer'
         self.src_mask = None
@@ -123,9 +136,18 @@ class RecoveryEncoder(nn.Module):
         self.encoder_layer = TransformerEncoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=self.feature_size * 8)
         self.encoder = TransformerEncoder(encoder_layer=self.encoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
+
+        # self.mlp = nn.Sequential(
+        #     nn.Linear(self.feature_size, self.feature_size * 8),
+        #     nn.LayerNorm(self.feature_size * 8),
+        #     nn.ReLU(),
+        #     nn.Linear(self.feature_size * 8, self.feature_size * 8)
+        # )
+
+        # self.norm = nn.LayerNorm(self.feature_size * 8)
 
         # Init weights
         init_range = 0.1
@@ -138,9 +160,12 @@ class RecoveryEncoder(nn.Module):
             mask = _generate_square_subsequent_mask(len(src)).to(device)
             self.src_mask = mask
 
+        # src = self.mlp(src)
         src = self.pos_encoder(src)
         output = self.encoder(src, self.src_mask)
+        # output = self.norm(output)
         output = self.ll(output)
+
         return output
 
     @property
@@ -151,11 +176,11 @@ class RecoveryEncoder(nn.Module):
 class Supervisor(nn.Module):
     def __init__(self, cfg: Dict):
         super(Supervisor, self).__init__()
-        self.feature_size = int(cfg['sup']['feature_size'])
-        self.num_layers = int(cfg['sup']['num_layers'])
-        self.dropout = float(cfg['sup']['dropout'])
-        self.n_head = int(cfg['sup']['n_head'])
-        self.dim_output = int(cfg['sup']['dim_output'])
+        self.feature_size = int(cfg['t_sup']['feature_size'])
+        self.num_layers = int(cfg['t_sup']['num_layers'])
+        self.dropout = float(cfg['t_sup']['dropout'])
+        self.n_head = int(cfg['t_sup']['n_head'])
+        self.dim_output = int(cfg['t_sup']['dim_output'])
         self.model_type = 'Transformer'
 
         # Architecture
@@ -163,9 +188,18 @@ class Supervisor(nn.Module):
         self.decoder_layer = TransformerDecoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=self.feature_size * 8)
         self.decoder = TransformerDecoder(decoder_layer=self.decoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
+
+        # self.mlp = nn.Sequential(
+        #     nn.Linear(self.feature_size, self.feature_size * 8),
+        #     nn.LayerNorm(self.feature_size * 8),
+        #     nn.ReLU(),
+        #     nn.Linear(self.feature_size * 8, self.feature_size * 8)
+        # )
+
+        # self.norm = nn.LayerNorm(self.feature_size * 8)
 
         # Init weights
         init_range = 0.1
@@ -173,8 +207,10 @@ class Supervisor(nn.Module):
         self.ll.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, tgt: Tensor, memory: Tensor) -> Tensor:
+        # tgt = self.mlp(tgt)
         tgt = self.pos_encoder(tgt)
         output = self.decoder(tgt, memory)
+        # output = self.norm(output)
         output = self.ll(output)
         return output
 
@@ -186,11 +222,11 @@ class Supervisor(nn.Module):
 class Generator(nn.Module):
     def __init__(self, cfg: Dict):
         super(Generator, self).__init__()
-        self.feature_size = int(cfg['g']['feature_size'])
-        self.num_layers = int(cfg['g']['num_layers'])
-        self.dropout = float(cfg['g']['dropout'])
-        self.n_head = int(cfg['g']['n_head'])
-        self.dim_output = int(cfg['g']['dim_output'])
+        self.feature_size = int(cfg['t_g']['feature_size'])
+        self.num_layers = int(cfg['t_g']['num_layers'])
+        self.dropout = float(cfg['t_g']['dropout'])
+        self.n_head = int(cfg['t_g']['n_head'])
+        self.dim_output = int(cfg['t_g']['dim_output'])
 
         self.model_type = 'Transformer'
         self.src_mask = None
@@ -200,7 +236,7 @@ class Generator(nn.Module):
         self.encoder_layer = TransformerEncoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=self.feature_size * 8)
         self.encoder = TransformerEncoder(encoder_layer=self.encoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
@@ -228,18 +264,18 @@ class Generator(nn.Module):
 class DiscriminatorDecoder(nn.Module):
     def __init__(self, cfg: Dict):
         super(DiscriminatorDecoder, self).__init__()
-        self.feature_size = int(cfg['d']['feature_size'])
-        self.num_layers = int(cfg['d']['num_layers'])
-        self.dropout = float(cfg['d']['dropout'])
-        self.n_head = int(cfg['d']['n_head'])
-        self.dim_output = int(cfg['d']['dim_output'])
+        self.feature_size = int(cfg['t_d']['feature_size'])
+        self.num_layers = int(cfg['t_d']['num_layers'])
+        self.dropout = float(cfg['t_d']['dropout'])
+        self.n_head = int(cfg['t_d']['n_head'])
+        self.dim_output = int(cfg['t_d']['dim_output'])
 
         # Architecture
         self.pos_encoder = PositionalEncoding(dim_model=self.feature_size)
         self.decoder_layer = TransformerDecoderLayer(d_model=self.feature_size,
                                                      nhead=self.n_head,
                                                      dropout=self.dropout,
-                                                     dim_feedforward=self.feature_size * 4)
+                                                     dim_feedforward=self.feature_size * 8)
         self.decoder = TransformerDecoder(decoder_layer=self.decoder_layer, num_layers=self.num_layers)
         self.ll = nn.Linear(in_features=self.feature_size, out_features=self.dim_output)
 
@@ -258,11 +294,11 @@ class DiscriminatorDecoder(nn.Module):
 class DiscriminatorEncoder(nn.Module):
     def __init__(self, cfg: Dict):
         super(DiscriminatorEncoder, self).__init__()
-        self.feature_size = int(cfg['d']['feature_size'])
-        self.num_layers = int(cfg['d']['num_layers'])
-        self.dropout = float(cfg['d']['dropout'])
-        self.n_head = int(cfg['d']['n_head'])
-        self.dim_output = int(cfg['d']['dim_output'])
+        self.feature_size = int(cfg['t_d']['feature_size'])
+        self.num_layers = int(cfg['t_d']['num_layers'])
+        self.dropout = float(cfg['t_d']['dropout'])
+        self.n_head = int(cfg['t_d']['n_head'])
+        self.dim_output = int(cfg['t_d']['dim_output'])
 
         self.model_type = 'Transformer'
         self.src_mask = None
@@ -315,7 +351,7 @@ def _embedding_forward_main(emb: Embedding,
     assert src.device == emb.device, 'Src and EMB are not on the same device'
     h = emb(src)
     _src = rec(h)
-    _h_sup = sup(h)  # temporal dynamics
+    _h_sup = sup(h, h)  # temporal dynamics
 
     g_loss_sup = F.mse_loss(
         _h_sup[:, :-1, :],
@@ -336,7 +372,7 @@ def _supervisor_forward(emb: Embedding,
 
     # Supervisor forward pass
     h = emb(src)
-    _h_sup = sup(h)
+    _h_sup = sup(h, h)
 
     # Supervised loss
 
@@ -361,7 +397,7 @@ def _discriminator_forward(emb: Embedding,
 
     # Discriminator forward pass and adversarial loss
     h = emb(src).detach()
-    _h = sup(h).detach()
+    _h = sup(h, h).detach()
     _e = g(z).detach()
 
     # Forward Pass
@@ -391,12 +427,12 @@ def _generator_forward(emb: Embedding,
 
     # Supervised Forward Pass
     h = emb(src)
-    _h_sup = sup(h)
+    _h_sup = sup(h, h)
     _x = rec(h)
 
     # Generator Forward Pass
     _e = g(z)
-    _h = sup(_e)
+    _h = sup(_e, _e)
 
     # Synthetic generated data
     _src = rec(_h)  # recovered data
@@ -421,7 +457,7 @@ def _generator_forward(emb: Embedding,
     g_loss_v = g_loss_v1 + g_loss_v2
 
     # 4. Sum
-    g_loss = g_loss_u + gamma * g_loss_u_e + 100 * torch.sqrt(g_loss_s) + 100 * g_loss_v
+    g_loss = g_loss_u + gamma * g_loss_u_e + 100 * torch.sqrt(g_loss_s) + 1000 * g_loss_v
 
     return g_loss
 
@@ -454,7 +490,7 @@ def _inference(sup: Supervisor,
     # tgt = torch.zeros_like(_e)
     # tgt[0, 0, :] = initial_sup_input
     # for i in range(seq_len - 1):
-    _h = sup(_e)
+    _h = sup(_e, _e)
     # tgt[0, i + 1, :] = _h[0, i, :]
 
     # Synthetic generated data (reconstructed)
@@ -464,13 +500,15 @@ def _inference(sup: Supervisor,
 
 def embedding_trainer(emb: Embedding,
                       sup: Supervisor,
-                      rec: RecoveryEncoder,
+                      rec: RecoveryEncoder or RecoveryDecoder,
                       emb_opt: Optimizer,
                       rec_opt: Optimizer,
                       dl: DataLoader,
-                      cfg: Dict) -> None:
-    num_epochs = int(cfg['emb']['num_epochs'])
+                      cfg: Dict,
+                      real_samples: np.ndarray) -> None:
+    num_epochs = int(cfg['t_emb']['num_epochs'])
     device = torch.device(cfg['system']['device'])
+    batch_size = int(cfg['system']['batch_size'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -496,18 +534,60 @@ def embedding_trainer(emb: Embedding,
             emb_opt.step()
             rec_opt.step()
 
-            if idx == len(dl) - 1:
-                pass
+            if idx % 10 == 0:
+                y1 = x.detach().cpu().numpy()[0, :, 0].tolist()
+                y2 = _x.detach().cpu().numpy()[0, :, 0].tolist()
+                x = list(range(len(y1)))
+
+                real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
+                # real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
+                #                                                real_samples_tensor.shape[1] * \
+                #                                                real_samples_tensor.shape[2])
+
+                generated_samples = []
+                with torch.no_grad():
+                    for e in real_samples[:1000]:
+                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+                        e_tensor = e_tensor.to(device)
+                        e_tensor = e_tensor.float()
+                        _t, _ = Energy.extract_time(e_tensor)
+                        _, sample = _embedding_forward_side(emb=emb, rec=rec, src=e_tensor)
+                        generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
+
+                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
+                # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                #                                                          generated_samples_tensor.shape[1] * \
+                #                                                          generated_samples_tensor.shape[2])
+
+                fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
+                                              generated_data=generated_samples_tensor.numpy(),
+                                              perplexity=40,
+                                              legend=['Embedded sequence', 'Recovered sequence'])
+
+                wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
+                                                                             ys=[y1, y2],
+                                                                             keys=['Original', 'Reconstructed'],
+                                                                             xname='time',
+                                                                             title="Reconstructed data plot")},
+                          step=epoch * len(dl) + idx)
+
+                wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
+                wandb.log({'Emb loss': e_loss0}, step=epoch * len(dl) + idx)
+
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
 def supervisor_trainer(emb: Embedding,
                        sup: Supervisor,
+                       rec: RecoveryDecoder or RecoveryEncoder,
                        sup_opt: Optimizer,
                        dl: DataLoader,
-                       cfg: Dict) -> None:
+                       cfg: Dict,
+                       real_samples: np.ndarray) -> None:
+
     num_epochs = int(cfg['t_sup']['num_epochs'])
     device = torch.device(cfg['system']['device'])
+    batch_size = int(cfg['system']['batch_size'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -531,8 +611,50 @@ def supervisor_trainer(emb: Embedding,
             # Update model parameters
             sup_opt.step()
 
-            if idx == len(dl) - 1:
-                pass
+            if idx % 10 == 0:
+                y1 = h.detach().cpu().numpy()[0, :, 0].tolist()
+                y2 = _h_sup.detach().cpu().numpy()[0, :, 0].tolist()
+                x = list(range(len(y1)))
+
+                embedding_samples = []
+                supervised_samples = []
+
+                with torch.no_grad():
+                    for e in real_samples[:1000]:
+                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+                        e_tensor = e_tensor.to(device)
+                        e_tensor = e_tensor.float()
+                        _t, _ = Energy.extract_time(e_tensor)
+                        _, sample = _embedding_forward_side(emb=emb, rec=rec, src=e_tensor)
+                        _, h, _h_sup = _supervisor_forward(emb=emb, sup=sup, src=e_tensor)
+                        supervised_samples.append(_h_sup.detach().cpu().numpy()[0, :, :])
+                        embedding_samples.append(h.detach().cpu().numpy()[0, :, :])
+
+                embedding_samples_tensor = torch.from_numpy(np.array(embedding_samples))
+                # embedding_samples_tensor = embedding_samples_tensor.view(embedding_samples_tensor.shape[0],
+                #                                                          embedding_samples_tensor.shape[1] * \
+                #                                                          embedding_samples_tensor.shape[2])
+
+                supervised_samples_tensor = torch.from_numpy(np.array(supervised_samples))
+                # supervised_samples_tensor = supervised_samples_tensor.view(supervised_samples_tensor.shape[0],
+                #                                                            supervised_samples_tensor.shape[1] * \
+                #                                                            supervised_samples_tensor.shape[2])
+
+                fig = visualisation.visualize(real_data=embedding_samples_tensor.numpy(),
+                                              generated_data=supervised_samples_tensor.numpy(),
+                                              perplexity=40,
+                                              legend=['Embedded data', 'Supervised data'])
+
+                wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
+                                                                             ys=[y1, y2],
+                                                                             keys=['Embedding', 'Supervised'],
+                                                                             xname='time',
+                                                                             title="Supervised data plot")},
+                          step=epoch * len(dl) + idx)
+
+                wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
+                wandb.log({'Supervisor loss': loss}, step=epoch * len(dl) + idx)
+
         print(f"[SUP] Epoch: {epoch}, Loss: {loss:.4f}")
 
 
@@ -547,13 +669,15 @@ def joint_trainer(emb: Embedding,
                   rec_opt: Optimizer,
                   emb_opt: Optimizer,
                   dl: DataLoader,
-                  cfg: Dict) -> None:
-
+                  cfg: Dict,
+                  real_samples: np.ndarray) -> None:
     num_epochs = int(cfg['system']['jointly_num_epochs'])
     seq_len = int(cfg['system']['seq_len'])
     d_threshold = float(cfg['t_d']['threshold'])
     device = torch.device(cfg['system']['device'])
     perplexity = int(cfg['system']['perplexity'])
+
+    batch_size = int(config['system']['batch_size'])
 
     for epoch in range(num_epochs):
         for idx, real_data in enumerate(dl):
@@ -618,25 +742,179 @@ def joint_trainer(emb: Embedding,
                 d_opt.step()
             d_loss = d_loss.item()
 
-            if idx == len(dl) - 1:
-                pass
+            if idx % 10 == 0:
+                # Generate sample
+                sample = _inference(sup=sup, g=g, rec=rec, z=z, seq_len=seq_len)
+                fake_sample = sample.detach().cpu().numpy()[0, :, 0]
+                real_sample = x.detach().cpu().numpy()[0, :, 0]
+
+                y1 = fake_sample.tolist()
+                y2 = real_sample.tolist()
+                x = list(range(len(y1)))
+
+                generated_samples = []
+                comp_real_samples = []
+
+                with torch.no_grad():
+                    # rs_tensor = torch.from_numpy(np.array(real_samples[:1000])).to(device).float()
+                    # _t, _ = Energy.extract_time(rs_tensor)
+                    # z = torch.rand_like(rs_tensor)
+                    # gs = _inference(sup=sup, g=g, z=z, t=_t, rec=rec)
+
+                    for e in real_samples[:1000]:
+                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+                        e_tensor = e_tensor.to(device)
+                        e_tensor = e_tensor.float()
+                        _t, _ = Energy.extract_time(e_tensor)
+                        z = torch.rand_like(e_tensor)
+                        gs = _inference(sup=sup, g=g, z=z, rec=rec, seq_len=seq_len)
+                        comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
+                        generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
+
+                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
+                # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+                #                                                          generated_samples_tensor.shape[1] * \
+                #                                                          generated_samples_tensor.shape[2])
+
+                comp_real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
+                # comp_real_samples_tensor = comp_real_samples_tensor.view(comp_real_samples_tensor.shape[0],
+                #                                                          comp_real_samples_tensor.shape[1] * \
+                #                                                          comp_real_samples_tensor.shape[2])
+
+                fig = visualisation.visualize(real_data=comp_real_samples_tensor.numpy(),
+                                              generated_data=generated_samples_tensor.detach().cpu().numpy(),
+                                              perplexity=40,
+                                              legend=['Generated data', 'Real data'])
+
+                wandb.log({"Generated data plot": wandb.plot.line_series(xs=x,
+                                                                         ys=[y1, y2],
+                                                                         keys=['Generated', 'Real'],
+                                                                         xname='time',
+                                                                         title="Generated data plot")},
+                          step=epoch * len(dl) + idx)
+
+                wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
+                wandb.log({'G loss': g_loss}, step=epoch * len(dl) + idx)
+                wandb.log({'D loss': d_loss}, step=epoch * len(dl) + idx)
+                wandb.log({'E loss': e_loss}, step=epoch * len(dl) + idx)
+
         print(f"[JOINT] Epoch: {epoch}, E_loss: {e_loss:.4f}, G_loss: {g_loss:.4f}, D_loss: {d_loss:.4f}")
 
 
-def time_gan_trainer(cfg: Dict) -> None:
+def get_dataset(name: str) -> Dataset:
+    if name == 'energy':
+        return Energy.Energy(seq_len=24, path='./data/energy.csv')
+    elif name == 'sine':
+        return SineWave.SineWave(samples_number=24 * 1000, seq_len=24, features_dim=28)
+    elif name == 'stock':
+        return Stock.Stock(seq_len=24, path='./data/stock.csv')
+    else:
+        raise ValueError('The dataset does not exist')
+
+
+def time_gan_trainer(cfg: Dict, step: str) -> None:
     # Init all parameters and models
     seq_len = int(cfg['system']['seq_len'])
     batch_size = int(cfg['system']['batch_size'])
     device = torch.device(cfg['system']['device'])
 
-    lr = float(cfg['system']['lr'])
-    # ds_generator = GeneralDataset.GeneralDataset(seq_len, dataset_name, model_name)
-    # ds = ds_generator.get_dataset()
+    print('Current device', device)
 
-    ds = Energy.Energy(seq_len)
+    lr = float(cfg['system']['lr'])
+
+    ds_name = cfg['system']['dataset']
+    ds = get_dataset(ds_name)
     dl = DataLoader(ds, num_workers=10, batch_size=batch_size, shuffle=True)
 
-    pass
+    # TimeGAN elements
+    emb = Embedding(cfg=cfg).to(device)
+    rec = RecoveryEncoder(cfg=cfg).to(device)
+    sup = Supervisor(cfg=cfg).to(device)
+    g = Generator(cfg=cfg).to(device)
+    d = DiscriminatorEncoder(cfg=cfg).to(device)
+
+    # Optimizers
+    emb_opt_side = Adam(emb.parameters(), lr=lr)
+    emb_opt_main = Adam(emb.parameters(), lr=lr)
+    rec_opt = Adam(rec.parameters(), lr=lr)
+    sup_opt = Adam(sup.parameters(), lr=lr)
+    g_opt = Adam(g.parameters(), lr=lr)
+    d_opt = Adam(d.parameters(), lr=lr)
+
+    if step == "embedding":
+        print(f"[EMB] Start Embedding network training")
+        embedding_trainer(emb=emb,
+                          rec=rec,
+                          sup=sup,
+                          emb_opt=emb_opt_side,
+                          rec_opt=rec_opt,
+                          dl=dl,
+                          cfg=cfg,
+                          real_samples=ds.get_distribution())
+
+        emb = emb.to('cpu')
+        rec = rec.to('cpu')
+        torch.save(emb.state_dict(), './trained_models/trans_emb_{}.pt'.format(config['system']['dataset']))
+        torch.save(rec.state_dict(), './trained_models/trans_rec_{}.pt'.format(config['system']['dataset']))
+
+    elif step == "supervisor":
+        emb = Embedding(cfg=cfg)
+        emb.load_state_dict(torch.load('./trained_models/trans_emb_{}.pt'.format(config['system']['dataset'])))
+        emb = emb.to(device)
+        emb.train()
+
+        rec = RecoveryEncoder(cfg=cfg)
+        rec.load_state_dict(torch.load('./trained_models/trans_rec_{}.pt'.format(config['system']['dataset'])))
+        rec = rec.to(device)
+        rec.train()
+
+        print(f"[SUP] Start Supervisor network training")
+        supervisor_trainer(emb=emb,
+                           sup=sup,
+                           rec=rec,
+                           sup_opt=sup_opt,
+                           dl=dl,
+                           cfg=cfg,
+                           real_samples=ds.get_distribution())
+
+        sup = sup.to('cpu')
+        torch.save(sup.state_dict(), './trained_models/trans_sup_{}.pt'.format(config['system']['dataset']))
+    elif step == 'joint':
+        print(f"[JOINT] Start joint training")
+        emb = Embedding(cfg=cfg)
+        emb.load_state_dict(torch.load('./trained_models/trans_emb_{}.pt'.format(config['system']['dataset'])))
+        emb = emb.to(device)
+
+        rec = RecoveryEncoder(cfg=cfg)
+        rec.load_state_dict(torch.load('./trained_models/trans_rec_{}.pt'.format(config['system']['dataset'])))
+        rec = rec.to(device)
+
+        sup = Supervisor(cfg=cfg)
+        sup.load_state_dict(torch.load('./trained_models/trans_sup_{}.pt'.format(config['system']['dataset'])))
+        sup = sup.to(device)
+
+        joint_trainer(emb=emb,
+                      rec=rec,
+                      sup=sup,
+                      g=g,
+                      d=d,
+                      emb_opt=emb_opt_main,
+                      rec_opt=rec_opt,
+                      sup_opt=sup_opt,
+                      g_opt=g_opt,
+                      d_opt=d_opt,
+                      dl=dl,
+                      cfg=cfg,
+                      real_samples=ds.get_distribution())
+
+        g = g.to('cpu')
+        torch.save(g.state_dict(), './trained_models/trans_g_{}.pt'.format(config['system']['dataset']))
+
+        d = d.to('cpu')
+        torch.save(d.state_dict(), './trained_models/trans_d_{}.pt'.format(config['system']['dataset']))
+
+    else:
+        raise ValueError('The step should be: embedding, supervisor or joint')
 
 
 if __name__ == '__main__':
@@ -647,6 +925,8 @@ if __name__ == '__main__':
     torch.random.manual_seed(42)
     with open('config/tconfig.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-    run_name = config['system']['run_name'] + ' ' + config['system']['dataset']
+
+    step = 'joint'
+    run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + ' ' + step
     wandb.init(config=config, project='_transtimegan_visualisation_', name=run_name)
-    time_gan_trainer(cfg=config)
+    time_gan_trainer(cfg=config, step=step)
