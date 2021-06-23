@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from typing import Dict
-
+from data import Energy
+from torch.utils.data import DataLoader
 
 def _get_rnn_module(model_type: str) -> nn.RNN or nn.LSTM or nn.GRU:
     if model_type == "rnn":
@@ -76,3 +77,9 @@ def run_general_rnn_test() -> None:
 
 if __name__ == '__main__':
     run_general_rnn_test()
+    ds = Energy.Energy(seq_len=24, path='../data/energy.csv')
+    dl = DataLoader(ds, batch_size=100, num_workers=2, shuffle=True)
+
+    for epoch in range(100):
+        for idx, e in enumerate(dl):
+            pass
