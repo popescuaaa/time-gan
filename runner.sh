@@ -1,1 +1,1 @@
-STEP='embedding' DATASET='stock' DEVICE='cuda:1' nohup python3 TimeGANv1.py && DATASET='stock' STEP='supervisor' DEVICE='cuda:1' nohup python3 TimeGANv1.py && STEP='joint' DATASET='stock' DEVICE='cuda:1' nohup python3 TimeGANv1.py
+STEP='embedding' DATASET='sine' DEVICE='cuda:0' nohup python3 TimeGANv1.py && DATASET='sine' STEP='supervisor' DEVICE='cuda:0' nohup python3 TimeGANv1.py && STEP='joint' DATASET='sine' DEVICE='cuda:0' nohup python3 TimeGANv1.py
