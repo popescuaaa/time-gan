@@ -5,6 +5,7 @@ from typing import Dict
 from data import Energy
 from torch.utils.data import DataLoader
 
+
 def _get_rnn_module(model_type: str) -> nn.RNN or nn.LSTM or nn.GRU:
     if model_type == "rnn":
         return nn.RNN

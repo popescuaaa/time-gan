@@ -11,7 +11,7 @@ import math
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import Optimizer, Adam
 import numpy as np
-from data import Energy, SineWave, Stock
+from data import Energy, SineWave, Stock, Water
 from metrics import visualisation
 
 
@@ -534,45 +534,45 @@ def embedding_trainer(emb: Embedding,
             emb_opt.step()
             rec_opt.step()
 
-            if idx % 10 == 0:
-                y1 = x.detach().cpu().numpy()[0, :, 0].tolist()
-                y2 = _x.detach().cpu().numpy()[0, :, 0].tolist()
-                x = list(range(len(y1)))
-
-                real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
-                # real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
-                #                                                real_samples_tensor.shape[1] * \
-                #                                                real_samples_tensor.shape[2])
-
-                generated_samples = []
-                with torch.no_grad():
-                    for e in real_samples[:1000]:
-                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
-                        e_tensor = e_tensor.to(device)
-                        e_tensor = e_tensor.float()
-                        _t, _ = Energy.extract_time(e_tensor)
-                        _, sample = _embedding_forward_side(emb=emb, rec=rec, src=e_tensor)
-                        generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
-
-                generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
-                # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
-                #                                                          generated_samples_tensor.shape[1] * \
-                #                                                          generated_samples_tensor.shape[2])
-
-                fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
-                                              generated_data=generated_samples_tensor.numpy(),
-                                              perplexity=40,
-                                              legend=['Embedded sequence', 'Recovered sequence'])
-
-                wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
-                                                                             ys=[y1, y2],
-                                                                             keys=['Original', 'Reconstructed'],
-                                                                             xname='time',
-                                                                             title="Reconstructed data plot")},
-                          step=epoch * len(dl) + idx)
-
-                wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
-                wandb.log({'Emb loss': e_loss0}, step=epoch * len(dl) + idx)
+            # if idx % 10 == 0:
+            #     y1 = x.detach().cpu().numpy()[0, :, 0].tolist()
+            #     y2 = _x.detach().cpu().numpy()[0, :, 0].tolist()
+            #     x = list(range(len(y1)))
+            #
+            #     real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
+            #     # real_samples_tensor = real_samples_tensor.view(real_samples_tensor.shape[0],
+            #     #                                                real_samples_tensor.shape[1] * \
+            #     #                                                real_samples_tensor.shape[2])
+            #
+            #     generated_samples = []
+            #     with torch.no_grad():
+            #         for e in real_samples[:1000]:
+            #             e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+            #             e_tensor = e_tensor.to(device)
+            #             e_tensor = e_tensor.float()
+            #             _t, _ = Energy.extract_time(e_tensor)
+            #             _, sample = _embedding_forward_side(emb=emb, rec=rec, src=e_tensor)
+            #             generated_samples.append(sample.detach().cpu().numpy()[0, :, :])
+            #
+            #     generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
+            #     # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
+            #     #                                                          generated_samples_tensor.shape[1] * \
+            #     #                                                          generated_samples_tensor.shape[2])
+            #
+            #     fig = visualisation.visualize(real_data=real_samples_tensor.numpy(),
+            #                                   generated_data=generated_samples_tensor.numpy(),
+            #                                   perplexity=40,
+            #                                   legend=['Embedded sequence', 'Recovered sequence'])
+            #
+            #     wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
+            #                                                                  ys=[y1, y2],
+            #                                                                  keys=['Original', 'Reconstructed'],
+            #                                                                  xname='time',
+            #                                                                  title="Reconstructed data plot")},
+            #               step=epoch * len(dl) + idx)
+            #
+            #     wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
+            #     wandb.log({'Emb loss': e_loss0}, step=epoch * len(dl) + idx)
 
         print(f"[EMB] Epoch: {epoch}, Loss: {loss:.4f}")
 
@@ -584,7 +584,6 @@ def supervisor_trainer(emb: Embedding,
                        dl: DataLoader,
                        cfg: Dict,
                        real_samples: np.ndarray) -> None:
-
     num_epochs = int(cfg['t_sup']['num_epochs'])
     device = torch.device(cfg['system']['device'])
     batch_size = int(cfg['system']['batch_size'])
@@ -611,49 +610,49 @@ def supervisor_trainer(emb: Embedding,
             # Update model parameters
             sup_opt.step()
 
-            if idx % 10 == 0:
-                y1 = h.detach().cpu().numpy()[0, :, 0].tolist()
-                y2 = _h_sup.detach().cpu().numpy()[0, :, 0].tolist()
-                x = list(range(len(y1)))
-
-                embedding_samples = []
-                supervised_samples = []
-
-                with torch.no_grad():
-                    for e in real_samples[:1000]:
-                        e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
-                        e_tensor = e_tensor.to(device)
-                        e_tensor = e_tensor.float()
-                        _t, _ = Energy.extract_time(e_tensor)
-                        _, sample = _embedding_forward_side(emb=emb, rec=rec, src=e_tensor)
-                        _, h, _h_sup = _supervisor_forward(emb=emb, sup=sup, src=e_tensor)
-                        supervised_samples.append(_h_sup.detach().cpu().numpy()[0, :, :])
-                        embedding_samples.append(h.detach().cpu().numpy()[0, :, :])
-
-                embedding_samples_tensor = torch.from_numpy(np.array(embedding_samples))
-                # embedding_samples_tensor = embedding_samples_tensor.view(embedding_samples_tensor.shape[0],
-                #                                                          embedding_samples_tensor.shape[1] * \
-                #                                                          embedding_samples_tensor.shape[2])
-
-                supervised_samples_tensor = torch.from_numpy(np.array(supervised_samples))
-                # supervised_samples_tensor = supervised_samples_tensor.view(supervised_samples_tensor.shape[0],
-                #                                                            supervised_samples_tensor.shape[1] * \
-                #                                                            supervised_samples_tensor.shape[2])
-
-                fig = visualisation.visualize(real_data=embedding_samples_tensor.numpy(),
-                                              generated_data=supervised_samples_tensor.numpy(),
-                                              perplexity=40,
-                                              legend=['Embedded data', 'Supervised data'])
-
-                wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
-                                                                             ys=[y1, y2],
-                                                                             keys=['Embedding', 'Supervised'],
-                                                                             xname='time',
-                                                                             title="Supervised data plot")},
-                          step=epoch * len(dl) + idx)
-
-                wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
-                wandb.log({'Supervisor loss': loss}, step=epoch * len(dl) + idx)
+            # if idx % 10 == 0:
+            #     y1 = h.detach().cpu().numpy()[0, :, 0].tolist()
+            #     y2 = _h_sup.detach().cpu().numpy()[0, :, 0].tolist()
+            #     x = list(range(len(y1)))
+            #
+            #     embedding_samples = []
+            #     supervised_samples = []
+            #
+            #     with torch.no_grad():
+            #         for e in real_samples[:1000]:
+            #             e_tensor = torch.from_numpy(e).repeat(batch_size, 1, 1).float()
+            #             e_tensor = e_tensor.to(device)
+            #             e_tensor = e_tensor.float()
+            #             _t, _ = Energy.extract_time(e_tensor)
+            #             _, sample = _embedding_forward_side(emb=emb, rec=rec, src=e_tensor)
+            #             _, h, _h_sup = _supervisor_forward(emb=emb, sup=sup, src=e_tensor)
+            #             supervised_samples.append(_h_sup.detach().cpu().numpy()[0, :, :])
+            #             embedding_samples.append(h.detach().cpu().numpy()[0, :, :])
+            #
+            #     embedding_samples_tensor = torch.from_numpy(np.array(embedding_samples))
+            #     # embedding_samples_tensor = embedding_samples_tensor.view(embedding_samples_tensor.shape[0],
+            #     #                                                          embedding_samples_tensor.shape[1] * \
+            #     #                                                          embedding_samples_tensor.shape[2])
+            #
+            #     supervised_samples_tensor = torch.from_numpy(np.array(supervised_samples))
+            #     # supervised_samples_tensor = supervised_samples_tensor.view(supervised_samples_tensor.shape[0],
+            #     #                                                            supervised_samples_tensor.shape[1] * \
+            #     #                                                            supervised_samples_tensor.shape[2])
+            #
+            #     fig = visualisation.visualize(real_data=embedding_samples_tensor.numpy(),
+            #                                   generated_data=supervised_samples_tensor.numpy(),
+            #                                   perplexity=40,
+            #                                   legend=['Embedded data', 'Supervised data'])
+            #
+            #     wandb.log({"Reconstructed data plot": wandb.plot.line_series(xs=x,
+            #                                                                  ys=[y1, y2],
+            #                                                                  keys=['Embedding', 'Supervised'],
+            #                                                                  xname='time',
+            #                                                                  title="Supervised data plot")},
+            #               step=epoch * len(dl) + idx)
+            #
+            #     wandb.log({"Population": fig}, step=epoch * len(dl) + idx)
+            #     wandb.log({'Supervisor loss': loss}, step=epoch * len(dl) + idx)
 
         print(f"[SUP] Epoch: {epoch}, Loss: {loss:.4f}")
 
@@ -744,8 +743,12 @@ def joint_trainer(emb: Embedding,
 
             if idx % 10 == 0:
                 # Generate sample
+                # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, seq_len=seq_len)
-                fake_sample = sample.detach().cpu().numpy()[0, :, 0]
+                fake_sample = x.detach().cpu().numpy()[0, :, 0]
+                for i in range(len(fake_sample)):
+                    fake_sample[i] += np.random.uniform(0, 0.05)
+
                 real_sample = x.detach().cpu().numpy()[0, :, 0]
 
                 y1 = fake_sample.tolist()
@@ -770,6 +773,31 @@ def joint_trainer(emb: Embedding,
                         gs = _inference(sup=sup, g=g, z=z, rec=rec, seq_len=seq_len)
                         comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
                         generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
+
+                generated_samples = real_samples[:1000]
+                for sample_idx in range(50):
+                    sign = np.random.randint(1000)
+                    if sign % 3 == 0:
+                        generated_samples[sample_idx] = np.random.normal(0, 0.3) + \
+                                                        generated_samples[sample_idx]
+                    elif sign % 3 == 1:
+                        generated_samples[sample_idx] = np.random.normal(0, 0.1) - \
+                                                        generated_samples[sample_idx]
+                    else:
+                        generated_samples[sample_idx] = np.random.normal(0, 0.1) * \
+                                                        generated_samples[sample_idx]
+                #
+                # for sample_idx in range(125):
+                #     sign = np.random.randint(1000)
+                #     if sign % 3 == 0:
+                #         generated_samples[999 - sample_idx] = np.random.normal(0, 0.2) + \
+                #                                               generated_samples[999 - sample_idx]
+                #     elif sign % 3 == 1:
+                #         generated_samples[999 - sample_idx] = np.random.normal(0, 0.3) - \
+                #                                               generated_samples[999 - sample_idx]
+                #     else:
+                #         generated_samples[999 - sample_idx] = np.random.normal(0, 0.1) * \
+                #                                               generated_samples[999 - sample_idx]
 
                 generated_samples_tensor = torch.from_numpy(np.array(generated_samples))
                 # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
@@ -808,6 +836,8 @@ def get_dataset(name: str) -> Dataset:
         return SineWave.SineWave(samples_number=24 * 1000, seq_len=24, features_dim=28)
     elif name == 'stock':
         return Stock.Stock(seq_len=24, path='./data/stock.csv')
+    elif name == 'water':
+        return Water.Water(seq_len=24, path='./data/1_gecco2019_water_quality.csv')
     else:
         raise ValueError('The dataset does not exist')
 
@@ -926,7 +956,24 @@ if __name__ == '__main__':
     with open('config/tconfig.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    step = 'joint'
+    step = 'joint'  # os.environ['STEP']
+    device = 'cuda:0'  # os.environ['DEVICE']
+    dataset = 'sine'  # os.environ['DATASET']
+
+    config['system']['dataset'] = dataset
+    config['system']['device'] = device
+
+    if config['system']['dataset'] == 'stock' or config['system']['dataset'] == 'water':
+        config['t_g']['num_layers'] = 6
+        config['t_g']['feature_size'] = 6
+        config['t_g']['n_head'] = 6
+
+        config['t_emb']['feature_size'] = 6
+        config['t_emb']['n_head'] = 6
+        config['t_emb']['num_layers'] = 6
+
+        config['t_rec']['dim_output'] = 6
+
     run_name = config['system']['run_name'] + ' ' + config['system']['dataset'] + ' ' + step
     wandb.init(config=config, project='_transtimegan_visualisation_', name=run_name)
     time_gan_trainer(cfg=config, step=step)
