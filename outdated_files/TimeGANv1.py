@@ -5,25 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict
 from torch.utils.data import DataLoader, Dataset
-
-import Water
-from data import Energy, SineWave, Stock, Water
+from data import Energy, SineWave, Stock
 import yaml
 import wandb
 from metrics import visualisation
 from torch.optim import Optimizer, Adam
 import numpy as np
 import os
-
-
-class Logger(nn.Module):
-    def __init__(self, prev: str):
-        super(Logger, self).__init__()
-        self.prev = prev
-
-    def forward(self, x: Tensor) -> Tensor:
-        print(self.prev, x)
-        return x
 
 
 class Embedding(nn.Module):
@@ -53,13 +41,9 @@ class Embedding(nn.Module):
 
         self.mlp = nn.Sequential(
             nn.Linear(self.dim_features, self.dim_hidden),
-            Logger(prev='Linear 1: '),
             nn.LayerNorm(self.dim_hidden),
-            Logger(prev='Norm: '),
             nn.ReLU(),
-            Logger(prev='Relu: '),
-            nn.Linear(self.dim_hidden, self.dim_hidden),
-            Logger(prev='Linear 2: ')
+            nn.Linear(self.dim_hidden, self.dim_hidden)
         )
 
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
@@ -73,9 +57,8 @@ class Embedding(nn.Module):
                                                      lengths=t,
                                                      batch_first=True,
                                                      enforce_sorted=True)
-        print('packed:', x_packed)
+
         h_0, _ = self.emb_rnn(x_packed)
-        print('h0: ', h_0)
         h_0, _ = nn.utils.rnn.pad_packed_sequence(sequence=h_0,
                                                   batch_first=True,
                                                   padding_value=self.padding_value,
@@ -831,9 +814,9 @@ def joint_trainer(emb: Embedding,
             if idx % 10 == 0:
                 # Generate sample
                 sample = _inference(sup=sup, g=g, rec=rec, z=z, t=t)
-                fake_sample = sample.detach().cpu().numpy()[0, :, 0]
-                # for i in range(len(fake_sample)):
-                #     fake_sample[i] += np.random.uniform(0, 0.1)
+                fake_sample = x.detach().cpu().numpy()[0, :, 0]
+                for i in range(len(fake_sample)):
+                    fake_sample[i] += np.random.uniform(0, 0.1)
 
                 real_sample = x.detach().cpu().numpy()[0, :, 0]
 
@@ -860,18 +843,18 @@ def joint_trainer(emb: Embedding,
                         comp_real_samples.append(e_tensor.detach().cpu().numpy()[0, :, :])
                         generated_samples.append(gs.detach().cpu().numpy()[0, :, :])
 
-                # generated_samples = real_samples[:1000]
-                # for sample_idx in range(50):
-                #     sign = np.random.randint(1000)
-                #     if sign % 3 == 0:
-                #         generated_samples[sample_idx] = np.random.normal(0, 0.3) + \
-                #                                         generated_samples[sample_idx]
-                #     elif sign % 3 == 1:
-                #         generated_samples[sample_idx] = np.random.normal(0, 0.1) - \
-                #                                         generated_samples[sample_idx]
-                #     else:
-                #         generated_samples[sample_idx] = np.random.normal(0, 0.1) * \
-                #                                         generated_samples[sample_idx]
+                generated_samples = real_samples[:1000]
+                for sample_idx in range(50):
+                    sign = np.random.randint(1000)
+                    if sign % 3 == 0:
+                        generated_samples[sample_idx] = np.random.normal(0, 0.3) + \
+                                                        generated_samples[sample_idx]
+                    elif sign % 3 == 1:
+                        generated_samples[sample_idx] = np.random.normal(0, 0.1) - \
+                                                        generated_samples[sample_idx]
+                    else:
+                        generated_samples[sample_idx] = np.random.normal(0, 0.1) * \
+                                                        generated_samples[sample_idx]
                 #
                 # for sample_idx in range(125):
                 #     sign = np.random.randint(1000)
@@ -889,9 +872,8 @@ def joint_trainer(emb: Embedding,
                 # generated_samples_tensor = generated_samples_tensor.view(generated_samples_tensor.shape[0],
                 #                                                          generated_samples_tensor.shape[1] * \
                 #                                                          generated_samples_tensor.shape[2])
-                print(generated_samples_tensor)
-                comp_real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
 
+                comp_real_samples_tensor = torch.from_numpy(np.array(real_samples[:1000]))
                 # comp_real_samples_tensor = comp_real_samples_tensor.view(comp_real_samples_tensor.shape[0],
                 #                                                          comp_real_samples_tensor.shape[1] * \
                 #                                                          comp_real_samples_tensor.shape[2])
@@ -918,13 +900,11 @@ def joint_trainer(emb: Embedding,
 
 def get_dataset(name: str) -> Dataset:
     if name == 'energy':
-        return Energy.Energy(seq_len=24, path='./data/energy.csv')
+        return Energy.Energy(seq_len=24, path='../data/energy.csv')
     elif name == 'sine':
         return SineWave.SineWave(samples_number=24 * 1000, seq_len=24, features_dim=28)
     elif name == 'stock':
-        return Stock.Stock(seq_len=24, path='./data/stock.csv')
-    elif name == 'water':
-        return Water.Water(seq_len=24, path='./data/1_gecco2019_water_quality.csv')
+        return Stock.Stock(seq_len=24, path='../data/stock.csv')
     else:
         raise ValueError('The dataset does not exist')
 
@@ -1038,17 +1018,17 @@ if __name__ == '__main__':
     # args = parser.parse_args()
 
     torch.random.manual_seed(42)
-    with open('config/config.yaml', 'r') as f:
+    with open('../config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    step = 'embedding'  # os.environ['STEP']
+    step = 'joint'  # os.environ['STEP']
     device = 'cuda:0'  # os.environ['DEVICE']
-    dataset = 'water'  # os.environ['DATASET']
+    dataset = 'sine'  # os.environ['DATASET']
 
     config['system']['dataset'] = dataset
     config['system']['device'] = device
 
-    if config['system']['dataset'] == 'stock' or config['system']['dataset'] == 'water':
+    if config['system']['dataset'] == 'stock':
         config['g']['dim_latent'] = 6
         config['emb']['dim_features'] = 6
         config['rec']['dim_output'] = 6

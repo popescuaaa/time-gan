@@ -10,7 +10,7 @@ def generate():
     samples = []
     device = torch.device('cpu')
 
-    with open('config/config.yaml', 'r') as f:
+    with open('../config/config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     cfg = config

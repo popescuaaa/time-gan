@@ -1,6 +1,6 @@
 from GeneralRNN import GeneralRNN
 from data import SineWave, Energy
-from TimeGANv1 import Generator, Recovery, Supervisor, _inference
+from outdated_files.TimeGANv1 import Generator, Recovery, Supervisor, _inference
 import torch
 import yaml
 import numpy as np
